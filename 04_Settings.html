@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>Shado Guesser - Game Settings</title>
+
+<style>
+
+body{
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+}
+
+h1{
+    border-bottom:4px solid #FF9800;
+    padding-bottom:10px;
+}
+
+h2{
+    margin-top:50px;
+    border-left:8px solid #FF9800;
+    padding-left:12px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th,td{
+    border:1px solid #cccccc;
+    padding:10px;
+}
+
+th{
+    background:#FF9800;
+    color:white;
+}
+
+.box{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+}
+
+.notice{
+    background:#FFF8E1;
+    border-left:6px solid #FFC107;
+    padding:15px;
+    margin-top:20px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>ゲーム設定仕様</h1>
+
+<p>
+
+本仕様書ではゲーム開始前に変更可能な設定項目について定義する。
+
+</p>
+
+<hr>
+
+<h2>1. 設定画面概要</h2>
+
+<div class="box">
+
+ゲーム開始前にプレイヤーは
+ゲーム設定を変更できる。
+
+ゲームモードによって
+変更可能な項目は異なる。
+
+</div>
+
+<hr>
+
+<h2>2. 出題範囲</h2>
+
+<table>
+
+<tr>
+<th>設定</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td>ローテーション</td>
+<td>ベーシックカード + 最新6パック</td>
+</tr>
+
+<tr>
+<td>アンリミテッド</td>
+<td>ベーシックカード + 全パック（トークン除外）</td>
+</tr>
+
+<tr>
+<td>全カード</td>
+<td>ベーシック・全パック・トークンを含む全カード</td>
+</tr>
+
+<tr>
+<td>カスタム</td>
+<td>プレイヤーが自由に条件を設定する</td>
+</tr>
+
+</table>
+
+<div class="notice">
+
+ローテーションは
+最新パック追加時に
+自動で最新6パックへ切り替わる設計とする。
+
+</div>
+
+<hr>
+
+<h2>3. カスタム設定</h2>
+
+<div class="box">
+
+カスタムを選択した場合のみ
+以下の設定を表示する。
+
+</div>
+
+<table>
+
+<tr>
+
+<th>設定項目</th>
+
+<th>内容</th>
+
+</tr>
+
+<tr>
+
+<td>クラス</td>
+
+<td>複数選択可</td>
+
+</tr>
+
+<tr>
+
+<td>カードパック</td>
+
+<td>複数選択可</td>
+
+</tr>
+
+<tr>
+
+<td>レアリティ</td>
+
+<td>複数選択可</td>
+
+</tr>
+
+<tr>
+
+<td>分類</td>
+
+<td>フォロワー・スペル・アミュレット</td>
+
+</tr>
+
+<tr>
+
+<td>コスト</td>
+
+<td>最小値・最大値指定</td>
+
+</tr>
+
+<tr>
+
+<td>トークン</td>
+
+<td>含める・含めない</td>
+
+</tr>
+
+</table>
+
+<hr>
+
+<h2>4. 回答回数</h2>
+
+<table>
+
+<tr>
+
+<th>項目</th>
+
+<th>初期値</th>
+
+</tr>
+
+<tr>
+
+<td>ソロモード回答回数</td>
+
+<td>10回</td>
+
+</tr>
+
+</table>
+
+<div class="notice">
+
+将来的に
+ゲーム作成時に変更できるよう拡張予定。
+
+</div>
+
+<hr>
+
+<h2>5. 制限時間</h2>
+
+<table>
+
+<tr>
+
+<th>項目</th>
+
+<th>初期値</th>
+
+</tr>
+
+<tr>
+
+<td>対戦モード回答時間</td>
+
+<td>30秒</td>
+
+</tr>
+
+</table>
+
+<div class="box">
+
+時間切れの場合、
+
+対象カードから
+ランダムに1枚選択し、
+
+そのカードを回答したものとして処理する。
+
+</div>
+
+<hr>
+
+<h2>6. ヒント設定</h2>
+
+<table>
+
+<tr>
+
+<th>項目</th>
+
+<th>仕様</th>
+
+</tr>
+
+<tr>
+
+<td>利用可能モード</td>
+
+<td>ソロモード・デイリーモード</td>
+
+</tr>
+
+<tr>
+
+<td>使用回数</td>
+
+<td>無制限</td>
+
+</tr>
+
+<tr>
+
+<td>方式</td>
+
+<td>Poke Guesserと同様</td>
+
+</tr>
+
+</table>
+
+<hr>
+
+<h2>7. デイリーモード設定</h2>
+
+<div class="box">
+
+デイリーモードでは
+
+通常設定は変更できない。
+
+全プレイヤーが
+同一条件・同一問題でプレイする。
+
+</div>
+
+<table>
+
+<tr>
+
+<th>項目</th>
+
+<th>仕様</th>
+
+</tr>
+
+<tr>
+
+<td>出題範囲</td>
+
+<td>運営設定</td>
+
+</tr>
+
+<tr>
+
+<td>問題</td>
+
+<td>毎日固定</td>
+
+</tr>
+
+<tr>
+
+<td>ヒント</td>
+
+<td>利用可能</td>
+
+</tr>
+
+<tr>
+
+<td>SNS共有</td>
+
+<td>対応</td>
+
+</tr>
+
+</table>
+
+<hr>
+
+<h2>8. SNS共有</h2>
+
+<div class="box">
+
+ゲーム終了後、
+
+Xへの投稿を促す画面を表示する。
+
+投稿内容には
+答えカードは含めない。
+
+</div>
+
+<p>
+
+投稿内容例
+
+</p>
+
+<pre>
+
+🃏 Shado Guesser Daily
+
+2026/07/27
+
+6 Guess!
+
+Hint : 1
+
+https://shado-guesser.xxx
+
+</pre>
+
+<hr>
+
+<h2>9. 将来追加予定設定</h2>
+
+<table>
+
+<tr>
+
+<th>設定</th>
+
+<th>予定</th>
+
+</tr>
+
+<tr>
+
+<td>回答回数変更</td>
+
+<td>〇</td>
+
+</tr>
+
+<tr>
+
+<td>ターン時間変更</td>
+
+<td>〇</td>
+
+</tr>
+
+<tr>
+
+<td>プリセット保存</td>
+
+<td>〇</td>
+
+</tr>
+
+<tr>
+
+<td>お気に入り設定</td>
+
+<td>〇</td>
+
+</tr>
+
+<tr>
+
+<td>難易度</td>
+
+<td>検討中</td>
+
+</tr>
+
+<tr>
+
+<td>ランダム設定</td>
+
+<td>検討中</td>
+
+</tr>
+
+</table>
+
+<hr>
+
+<p align="center">
+
+Shado Guesser
+
+Game Settings Specification
+
+Version 1.0
+
+</p>
+
+</body>
+
+</html>

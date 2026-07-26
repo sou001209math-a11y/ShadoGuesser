@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>Shado Guesser - Game Rules</title>
+
+<style>
+
+body{
+
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+
+}
+
+h1{
+
+    border-bottom:4px solid #2196F3;
+    padding-bottom:10px;
+
+}
+
+h2{
+
+    margin-top:50px;
+    border-left:8px solid #2196F3;
+    padding-left:12px;
+
+}
+
+table{
+
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+
+}
+
+th,td{
+
+    border:1px solid #cccccc;
+    padding:10px;
+
+}
+
+th{
+
+    background:#2196F3;
+    color:white;
+
+}
+
+.box{
+
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>ゲームルール・判定仕様</h1>
+
+<p>
+
+本仕様書では
+カード入力、
+判定方法、
+履歴、
+ゲーム終了条件について定義する。
+
+</p>
+
+<hr>
+
+<h2>1. ゲームの流れ</h2>
+
+<div class="box">
+
+<ol>
+
+<li>答えカードが決定される。</li>
+
+<li>プレイヤーがカード名を入力する。</li>
+
+<li>カード情報を比較する。</li>
+
+<li>比較結果を履歴へ追加する。</li>
+
+<li>正解ならゲーム終了。</li>
+
+<li>不正解なら次の回答へ進む。</li>
+
+</ol>
+
+</div>
+
+<hr>
+
+<h2>2. 入力仕様</h2>
+
+<div class="box">
+
+<ul>
+
+<li>入力はカード名のみとする。</li>
+
+<li>カード名は一意である。</li>
+
+<li>カード検索はオートコンプリートを使用する。</li>
+
+<li>候補から選択後に回答ボタン、またはEnterキーで回答する。</li>
+
+<li>存在しないカード名は回答できない。</li>
+
+<li>同一カードの複数回回答を許可する。</li>
+
+</ul>
+
+</div>
+
+<hr>
+
+<h2>3. 判定対象項目</h2>
+
+<table>
+
+<tr>
+
+<th>項目</th>
+<th>判定方式</th>
+
+</tr>
+
+<tr>
+
+<td>カード名</td>
+
+<td>一致のみ</td>
+
+</tr>
+
+<tr>
+
+<td>コスト</td>
+
+<td>○・▲・▼</td>
+
+</tr>
+
+<tr>
+
+<td>分類</td>
+
+<td>○・×</td>
+
+</tr>
+
+<tr>
+
+<td>攻撃力</td>
+
+<td>○・▲・▼・－</td>
+
+</tr>
+
+<tr>
+
+<td>体力</td>
+
+<td>○・▲・▼・－</td>
+
+</tr>
+
+<tr>
+
+<td>クラス</td>
+
+<td>○・×</td>
+
+</tr>
+
+<tr>
+
+<td>レアリティ</td>
+
+<td>○・×</td>
+
+</tr>
+
+<tr>
+
+<td>カードパック</td>
+
+<td>○・×</td>
+
+</tr>
+
+<tr>
+
+<td>キーワード能力</td>
+
+<td>○・△・×</td>
+
+</tr>
+
+</table>
+
+<hr>
+
+<h2>4. 判定表示</h2>
+
+<table>
+
+<tr>
+
+<th>表示</th>
+
+<th>意味</th>
+
+</tr>
+
+<tr>
+
+<td>🟩</td>
+
+<td>一致</td>
+
+</tr>
+
+<tr>
+
+<td>▲</td>
+
+<td>入力値が答えより小さい</td>
+
+</tr>
+
+<tr>
+
+<td>▼</td>
+
+<td>入力値が答えより大きい</td>
+
+</tr>
+
+<tr>
+
+<td>🟨</td>
+
+<td>キーワード一部一致</td>
+
+</tr>
+
+<tr>
+
+<td>⬜</td>
+
+<td>不一致</td>
+
+</tr>
+
+<tr>
+
+<td>－</td>
+
+<td>比較対象外</td>
+
+</tr>
+
+</table>
+
+<hr>
+
+<h2>5. 数値比較</h2>
+
+<div class="box">
+
+<h3>コスト</h3>
+
+<ul>
+
+<li>一致 → 🟩</li>
+
+<li>入力値が小さい → ▲</li>
+
+<li>入力値が大きい → ▼</li>
+
+</ul>
+
+<h3>攻撃力・体力</h3>
+
+<ul>
+
+<li>両カードがフォロワーの場合のみ比較する。</li>
+
+<li>スペル・アミュレットを含む場合は比較しない。</li>
+
+<li>比較不可の場合は「－」を表示する。</li>
+
+</ul>
+
+</div>
+
+<hr>
+
+<h2>6. 分類判定</h2>
+
+<div class="box">
+
+<ul>
+
+<li>フォロワー</li>
+
+<li>スペル</li>
+
+<li>アミュレット</li>
+
+</ul>
+
+一致した場合のみ🟩を表示する。
+
+それ以外は⬜を表示する。
+
+</div>
+
+<hr>
+
+<h2>7. キーワード能力判定</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+
+<th>表示</th>
+
+<th>条件</th>
+
+</tr>
+
+<tr>
+
+<td>🟩</td>
+
+<td>全キーワード・個数が一致</td>
+
+</tr>
+
+<tr>
+
+<td>🟨</td>
+
+<td>一部キーワードが一致</td>
+
+</tr>
+
+<tr>
+
+<td>⬜</td>
+
+<td>一致するキーワードが存在しない</td>
+
+</tr>
+
+</table>
+
+<p>
+
+キーワード単位では色を付けない。
+
+キーワード全体に対して判定色を表示する。
+
+</p>
+
+</div>
+
+<hr>
+
+<h2>8. 回答履歴</h2>
+
+<div class="box">
+
+<ul>
+
+<li>回答履歴はゲーム終了まで保持する。</li>
+
+<li>回答順に表示する。</li>
+
+<li>履歴は削除しない。</li>
+
+<li>スクロール表示とする。</li>
+
+<li>最新回答を一番下へ追加する。</li>
+
+</ul>
+
+</div>
+
+<hr>
+
+<h2>9. 正解</h2>
+
+<div class="box">
+
+カード名が一致した時点でゲーム終了とする。
+
+以降の判定は行わない。
+
+</div>
+
+<hr>
+
+<h2>10. 降参</h2>
+
+<div class="box">
+
+<ul>
+
+<li>降参ボタンを設置する。</li>
+
+<li>押した時点でゲーム終了。</li>
+
+<li>答えカードを公開する。</li>
+
+<li>デイリーモードではSNS共有を表示する。</li>
+
+</ul>
+
+</div>
+
+<hr>
+
+<h2>11. リセット</h2>
+
+<div class="box">
+
+<ul>
+
+<li>ゲーム終了後に表示する。</li>
+
+<li>新しい問題を生成する。</li>
+
+<li>回答履歴を削除する。</li>
+
+<li>入力欄を初期化する。</li>
+
+</ul>
+
+</div>
+
+</body>
+
+</html>
