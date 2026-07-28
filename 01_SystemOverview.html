@@ -1,0 +1,2570 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Shado Guesser 基本設計書 - 01 システム概要</title>
+
+<style>
+
+body{
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    color:#222;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+}
+
+h1{
+    border-bottom:4px solid #3f51b5;
+    padding-bottom:10px;
+}
+
+h2{
+    margin-top:45px;
+    border-left:8px solid #3f51b5;
+    padding-left:12px;
+}
+
+h3{
+    margin-top:30px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th,
+td{
+    border:1px solid #cccccc;
+    padding:10px;
+    vertical-align:top;
+}
+
+th{
+    background:#3f51b5;
+    color:white;
+}
+
+.box{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+}
+
+.notice{
+    background:#fff8e1;
+    border-left:6px solid #ffc107;
+    padding:15px;
+    margin-top:20px;
+}
+
+.rule{
+    background:#e8eaf6;
+    border-left:6px solid #3f51b5;
+    padding:15px;
+    margin-top:20px;
+}
+
+.warning{
+    background:#ffebee;
+    border-left:6px solid #d32f2f;
+    padding:15px;
+    margin-top:20px;
+}
+
+.example{
+    background:#e8f5e9;
+    border-left:6px solid #4caf50;
+    padding:15px;
+    margin-top:20px;
+}
+
+pre{
+    background:#222;
+    color:#f5f5f5;
+    padding:20px;
+    border-radius:8px;
+    overflow:auto;
+    line-height:1.6;
+}
+
+code{
+    background:#eeeeee;
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.small{
+    color:#777;
+    font-size:0.9em;
+}
+
+@media(max-width:700px){
+
+    body{
+        padding:18px;
+    }
+
+    table{
+        font-size:0.9em;
+    }
+
+    th,
+    td{
+        padding:7px;
+    }
+
+    pre{
+        padding:12px;
+        font-size:0.85em;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Shado Guesser 基本設計書</h1>
+
+<p>
+<strong>01：システム概要</strong>
+</p>
+
+<p>
+本設計書では、Shado Guesserの目的、システム構成、
+フロントエンド・API・データベース・リアルタイム通信の責務、
+ゲームモード、動作環境、
+および将来的なWordPressサイトへの移設・組み込み方針を定義する。
+</p>
+
+<hr>
+
+<h2>1. システム名称</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td>システム名称</td>
+<td>Shado Guesser</td>
+</tr>
+
+<tr>
+<td>種別</td>
+<td>ブラウザゲーム / Webアプリケーション</td>
+</tr>
+
+<tr>
+<td>対象</td>
+<td>Shadowverse: Worlds Beyondのカード</td>
+</tr>
+
+<tr>
+<td>基本ゲーム</td>
+<td>隠された正解カードを、回答カードとの比較情報から推測するゲーム</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>2. Shado Guesserの概要</h2>
+
+<div class="box">
+
+<p>
+Shado Guesserは、
+ランダムまたはモードごとの条件によって選択された
+1枚の正解カードを推測するカードGuessゲームである。
+</p>
+
+<p>
+プレイヤーはカード名を検索して回答し、
+回答したカードと正解カードの各種情報を比較する。
+</p>
+
+<p>
+比較結果として、
+一致・部分一致・不一致・数値の大小等が表示され、
+プレイヤーはそれらの情報から正解カードを絞り込む。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+ゲームの基本サイクルは、
+<strong>「カードを回答する → 比較結果を見る → 次のカードを推測する」</strong>
+とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>3. 参考とするゲーム形式</h2>
+
+<div class="box">
+
+<p>
+Shado Guesserは、
+Poke Guesserのゲーム形式を参考として企画する。
+</p>
+
+<p>
+ただし、
+Shadowverse: Worlds Beyondのカードデータ、
+ゲームモード、判定項目等に合わせて
+Shado Guesser独自の仕様を設計する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>4. システム構築方針</h2>
+
+<div class="box">
+
+<p>
+Shado Guesserは、
+<strong>WordPressに依存しない独立Webアプリケーション</strong>
+として構築する。
+</p>
+
+<p>
+同時に、
+将来的に既存WordPressサイトへ移設する場合も、
+ゲーム本体を大きく書き換えずに
+組み込み可能な構造を維持する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>基本方針</strong>
+
+<ul>
+<li>ゲーム本体はWordPress非依存とする。</li>
+<li>常時稼働VPS・常駐Node.jsサーバーを必須としない。</li>
+<li>Cloudflareのサーバーレス基盤を利用する。</li>
+<li>フロントエンド・API・DB・リアルタイム状態を役割ごとに分離する。</li>
+<li>正式なゲーム状態はクライアントではなくサーバー側を正とする。</li>
+<li>WordPress固有PHPをゲーム本体へ組み込まない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>5. 基本インフラ構成</h2>
+
+<div class="box">
+
+<p>
+初期版では、
+Cloudflareを中心としたサーバーレス構成を採用する。
+</p>
+
+</div>
+
+<pre>
+Shado Guesser
+
+┌─────────────────────────────────────┐
+│ Cloudflare Pages                    │
+│                                     │
+│ ・HTML                              │
+│ ・CSS                               │
+│ ・JavaScript                        │
+│ ・検索用静的カードデータ            │
+└─────────────────────────────────────┘
+                 │
+                 │ API
+                 ▼
+┌─────────────────────────────────────┐
+│ Cloudflare Workers                  │
+│                                     │
+│ ・ソロゲーム処理                    │
+│ ・デイリー処理                      │
+│ ・回答受付                          │
+│ ・回答判定                          │
+│ ・ゲーム開始処理                    │
+│ ・エラー処理                        │
+│ ・D1アクセス                        │
+└─────────────────────────────────────┘
+          │                  │
+          │                  │
+          ▼                  ▼
+┌──────────────────┐  ┌────────────────────────┐
+│ Cloudflare D1    │  │ Durable Objects        │
+│                  │  │                        │
+│ カードマスター   │  │ Solo / Daily           │
+│ 各種マスター     │  │ 2人出題                 │
+│ Data Version     │  │ 2人対戦                 │
+│ Daily設定・停止  │  │ 正解・回答履歴          │
+│ 運営設定・監査   │  │ 手番・期限・再接続      │
+│ エラーログ       │  │ DO Storage             │
+└──────────────────┘  └────────────────────────┘
+</pre>
+
+<hr>
+
+<h2>6. 各Cloudflareサービスの役割</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>サービス</th>
+<th>主な役割</th>
+</tr>
+
+<tr>
+<td>Cloudflare Pages</td>
+<td>HTML / CSS / JavaScript等のフロントエンド配信</td>
+</tr>
+
+<tr>
+<td>Cloudflare Workers</td>
+<td>API・ゲーム処理・回答判定・D1アクセス</td>
+</tr>
+
+<tr>
+<td>Cloudflare D1</td>
+<td>カードマスター・各種マスター・データバージョン・エラーログ等の永続データ</td>
+</tr>
+
+<tr>
+<td>Durable Objects</td>
+<td>Solo / Daily / 2人出題 / 2人対戦の進行中ゲーム状態管理</td>
+</tr>
+
+<tr>
+<td>WebSocket</td>
+<td>2人ゲームにおけるリアルタイム双方向通信</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>7. 常時稼働サーバーを持たない構成</h2>
+
+<div class="box">
+
+<p>
+初期版では、
+VPS上でNode.jsプロセスを24時間常駐させる構成を採用しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+必要な処理が発生したときに
+Workers・Durable Objects等を利用する
+サーバーレス構成を基本とする。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+将来的にアクセス規模・要件等の変化によって
+別インフラへ移行する可能性は残す。
+</p>
+
+<p>
+そのためゲームルールや画面コードと
+Cloudflare固有処理を可能な限り分離する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>8. 独立運用時の構成</h2>
+
+<div class="box">
+
+<pre>
+独立Webサイト
+
+┌────────────────────────────────┐
+│ Header                         │
+├────────────────────────────────┤
+│                                │
+│ Main                           │
+│                                │
+│ ┌────────────────────────────┐ │
+│ │         #sg-app            │ │
+│ │                            │ │
+│ │       Shado Guesser        │ │
+│ │                            │ │
+│ └────────────────────────────┘ │
+│                                │
+├────────────────────────────────┤
+│ Footer                         │
+└────────────────────────────────┘
+
+              │
+              ▼
+
+Cloudflare
+├─ Pages
+├─ Workers
+├─ D1
+└─ Durable Objects
+</pre>
+
+</div>
+
+<hr>
+
+<h2>9. WordPress移設時の構成</h2>
+
+<div class="box">
+
+<p>
+将来的にWordPressサイト内へ移設する場合、
+WordPressはサイトの外側を担当し、
+Shado Guesser本体は本文領域内で動作させる。
+</p>
+
+</div>
+
+<pre>
+WordPress
+
+┌────────────────────────────────┐
+│ WordPress Header               │
+├────────────────────────────────┤
+│                                │
+│ WordPress Main                 │
+│                                │
+│ ┌────────────────────────────┐ │
+│ │         #sg-app            │ │
+│ │                            │ │
+│ │       Shado Guesser        │ │
+│ │                            │ │
+│ └────────────────────────────┘ │
+│                                │
+├────────────────────────────────┤
+│ WordPress Footer               │
+└────────────────────────────────┘
+
+              │
+              │ API / WebSocket
+              ▼
+
+Cloudflare
+├─ Workers
+├─ D1
+└─ Durable Objects
+</pre>
+
+<div class="rule">
+
+<p>
+WordPressへ移設しても、
+回答判定・正解管理・対戦管理等を
+WordPress側へ移植しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>10. WordPressの役割</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>機能</th>
+<th>WordPress</th>
+</tr>
+
+<tr>
+<td>サイト共通ヘッダー</td>
+<td>担当可能</td>
+</tr>
+
+<tr>
+<td>サイト共通フッター</td>
+<td>担当可能</td>
+</tr>
+
+<tr>
+<td>ナビゲーション</td>
+<td>担当可能</td>
+</tr>
+
+<tr>
+<td>記事・ニュース等</td>
+<td>担当可能</td>
+</tr>
+
+<tr>
+<td>Shado Guesserの回答判定</td>
+<td>担当しない</td>
+</tr>
+
+<tr>
+<td>カードマスター管理</td>
+<td>担当しない</td>
+</tr>
+
+<tr>
+<td>対戦ルーム管理</td>
+<td>担当しない</td>
+</tr>
+
+<tr>
+<td>WebSocket状態管理</td>
+<td>担当しない</td>
+</tr>
+
+<tr>
+<td>デイリー正解管理</td>
+<td>担当しない</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>11. ゲームルート要素</h2>
+
+<div class="box">
+
+<p>
+Shado Guesserのフロントエンドは、
+専用ルート要素内で完結する構造とする。
+</p>
+
+</div>
+
+<pre>
+&lt;div id="sg-app"&gt;
+
+    Shado Guesser本体
+
+&lt;/div&gt;
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>ゲームUIは原則 <code>#sg-app</code> 内で完結する。</li>
+<li>サイト外側のDOMをゲーム本体から直接操作しない。</li>
+<li>WordPressへ移設しても同じゲームルートを使用できる構造とする。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>12. フロントエンドの責務</h2>
+
+<div class="box">
+
+<p>
+ブラウザ側は主に
+画面表示・ユーザー入力・表示用カウント等を担当する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>処理</th>
+<th>フロントエンド</th>
+</tr>
+
+<tr>
+<td>ゲーム画面表示</td>
+<td>担当</td>
+</tr>
+
+<tr>
+<td>カード名入力</td>
+<td>担当</td>
+</tr>
+
+<tr>
+<td>サジェスト検索</td>
+<td>担当</td>
+</tr>
+
+<tr>
+<td>回答操作</td>
+<td>担当</td>
+</tr>
+
+<tr>
+<td>判定結果表示</td>
+<td>担当</td>
+</tr>
+
+<tr>
+<td>履歴表示</td>
+<td>担当</td>
+</tr>
+
+<tr>
+<td>モーダル表示</td>
+<td>担当</td>
+</tr>
+
+<tr>
+<td>対戦残り時間の画面表示</td>
+<td>担当</td>
+</tr>
+
+<tr>
+<td>正式な正解カード決定</td>
+<td>担当しない</td>
+</tr>
+
+<tr>
+<td>正式な回答判定</td>
+<td>担当しない</td>
+</tr>
+
+<tr>
+<td>正式な対戦タイムアウト判定</td>
+<td>担当しない</td>
+</tr>
+
+<tr>
+<td>正式な勝敗確定</td>
+<td>担当しない</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>13. Cloudflare Workersの責務</h2>
+
+<div class="box">
+
+<p>
+Cloudflare WorkersはAPI入口、入力検証、D1アクセス、
+ゲーム作成、およびDurable Objectsへのルーティングを中心に担当する。
+進行中ゲームの正式状態そのものはDurable Objectsへ保持する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>主な処理</strong>
+
+<ul>
+<li>APIリクエスト受付・形式検証。</li>
+<li>ソロ・デイリー・2人出題・2人対戦の作成要求受付。</li>
+<li>D1からCurrent Data Version・カードデータ・Daily設定等を取得。</li>
+<li>回答カード・回答対象範囲等のサーバー側検証。</li>
+<li>ゲーム作成時の正解候補決定処理。</li>
+<li>Daily設定の取得・生成、およびDaily停止状態の確認。</li>
+<li>Durable Objectsへのルーティング。</li>
+<li>WebSocket Upgradeのルーティング。</li>
+<li>安全なエラーレスポンス生成。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>14. Cloudflare D1の責務</h2>
+
+<div class="box">
+
+<p>
+永続的に管理するゲームデータは、
+Cloudflare D1を基本データストアとする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>D1へ保存する主なデータ</strong>
+
+<ul>
+<li>カードマスター。</li>
+<li>カードパックマスター。</li>
+<li>クラスマスター。</li>
+<li>レアリティマスター。</li>
+<li>分類マスター。</li>
+<li>タイプマスター。</li>
+<li>キーワード能力マスター。</li>
+<li>カードとタイプの関連情報。</li>
+<li>カードとキーワード能力の関連情報。</li>
+<li>カードデータバージョン。</li>
+<li>Daily共通設定。</li>
+<li>Daily停止状態。</li>
+<li>エラーログ。</li>
+<li>運営上必要な設定値。</li>
+<li>管理操作の監査ログ。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>15. D1とSQLiteの関係</h2>
+
+<div class="box">
+
+<p>
+カードデータは、
+ローカルサーバー上の単一SQLiteファイルを
+本番DBとして直接配置する方式ではなく、
+Cloudflare D1で管理する。
+</p>
+
+<p>
+データモデル・SQL設計については、
+SQLite系のSQLを前提とした構造を採用する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+カード枚数が将来的に約7,000枚となる場合も考慮し、
+必要なインデックスを設定して
+カードID・名称・各種条件検索を効率化する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>16. Durable Objectsの責務</h2>
+
+<div class="box">
+
+<p>
+Solo・Daily・2人出題・2人対戦を含む、
+<strong>すべての進行中ゲーム状態</strong>を
+Durable Objectsで管理する。
+</p>
+
+<p>
+ブラウザやWorkersの一時メモリだけを
+正式なゲーム状態として使用しない。
+重要な状態はDurable Object Storageへ保存し、
+休止・再起動後も復元可能な構造とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>モード別の基本DO</strong>
+
+<table>
+<tr>
+<th>Durable Object</th>
+<th>対象</th>
+</tr>
+<tr>
+<td><code>GameSessionDO</code></td>
+<td>Solo / Daily</td>
+</tr>
+<tr>
+<td><code>ChallengeGameDO</code></td>
+<td>2人出題</td>
+</tr>
+<tr>
+<td><code>BattleRoomDO</code></td>
+<td>2人対戦</td>
+</tr>
+</table>
+
+</div>
+
+<div class="rule">
+
+<strong>主な管理対象</strong>
+
+<ul>
+<li>ゲームID・モード・状態。</li>
+<li>ゲーム開始時に固定したData Version。</li>
+<li>正解カード。</li>
+<li>回答回数。</li>
+<li>回答履歴。</li>
+<li>使用済みヒント。</li>
+<li>セッション・再接続情報。</li>
+<li>2人モードの参加状態。</li>
+<li>READY状態。</li>
+<li>先攻・後攻・現在手番。</li>
+<li>ターン期限。</li>
+<li>切断・30秒再接続猶予。</li>
+<li>退出・勝敗・終了状態。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>17. ゲームセッションとDurable Object</h2>
+
+<div class="box">
+
+<p>
+ゲームごとに独立した論理的なDurable Objectを割り当て、
+他ゲームの一時状態と混在させない構造を基本とする。
+</p>
+
+</div>
+
+<pre>
+Solo / Daily
+GameSessionDO
+      │
+      ├─ Answer
+      ├─ History
+      ├─ Hints
+      └─ Result
+
+2人出題
+ChallengeGameDO
+      │
+      ├─ Setter
+      ├─ Guesser
+      ├─ Answer
+      └─ History
+
+ROOM ABC123
+BattleRoomDO
+      │
+      ├─ Player A
+      ├─ Player B
+      ├─ READY
+      ├─ Turn / Deadline
+      ├─ History
+      └─ Result
+</pre>
+
+<div class="notice">
+
+具体的なObject ID・Storage・Alarm・有効期限等は
+「06 サーバー・Cloudflare設計」で定義する。
+</div>
+
+<hr>
+
+<h2>18. WebSocket</h2>
+
+<div class="box">
+
+<p>
+2人ゲームにおけるリアルタイム通信には
+WebSocketを使用する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>主な同期内容</strong>
+
+<ul>
+<li>ルーム参加。</li>
+<li>READY状態。</li>
+<li>ゲーム開始。</li>
+<li>先攻決定。</li>
+<li>回答。</li>
+<li>判定結果。</li>
+<li>回答履歴。</li>
+<li>手番変更。</li>
+<li>通信切断。</li>
+<li>再接続。</li>
+<li>退出。</li>
+<li>ゲーム終了。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>19. WebSocket Hibernation</h2>
+
+<div class="box">
+
+<p>
+Durable ObjectsによるWebSocket通信では、
+アイドル状態での不要な実行時間を抑えるため、
+WebSocket Hibernation APIの利用を基本方針とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+WebSocket接続を維持しながら、
+常時ゲーム処理を実行し続ける構成を避ける。
+</p>
+
+</div>
+
+<div class="notice">
+
+Hibernationから復帰した際に必要なゲーム状態を復元できるよう、
+重要な状態を単純なプロセスメモリだけに依存させない。
+</div>
+
+<hr>
+
+<h2>20. 120秒ターンタイマー</h2>
+
+<div class="box">
+
+<p>
+2人対戦の120秒タイマーでは、
+サーバーから毎秒残り時間を送信する方式を採用しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+サーバー側では、
+ターンの開始時刻・終了時刻を管理する。
+</p>
+
+</div>
+
+<pre>
+turnStartedAt
+15:00:00
+
+turnEndsAt
+15:02:00
+</pre>
+
+<p>
+ブラウザ側は終了時刻をもとに
+画面上の残り時間を表示する。
+</p>
+
+<pre>
+1:59
+1:58
+1:57
+...
+</pre>
+
+<div class="warning">
+
+<p>
+ブラウザ側の表示時間を
+正式なタイムアウト判定として信用しない。
+</p>
+
+<p>
+正式な時間切れ判定はサーバー側で行う。
+</p>
+
+</div>
+
+<hr>
+
+<h2>21. 検索用静的カードデータ</h2>
+
+<div class="box">
+
+<p>
+カード名入力時のサジェスト検索では、
+入力文字ごとにWorkers・D1へ問い合わせる方式を基本としない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+検索に必要な公開情報を
+検索用静的データとしてフロントエンドへ配布し、
+サジェスト検索はブラウザ内で実行する。
+</p>
+
+</div>
+
+<pre>
+D1
+
+カードマスター
+
+    ↓
+データ更新時に生成
+
+検索用静的データ
+
+    ↓
+Pagesから配信
+
+ブラウザ
+
+    ↓
+
+部分一致検索
+</pre>
+
+<hr>
+
+<h2>22. 検索用データに含める情報</h2>
+
+<div class="box">
+
+<p>
+検索用静的データには、
+サジェストおよび回答範囲判定に必要な
+公開情報のみを含める。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+具体的な項目は04 データ設計で定義する。
+</p>
+
+<p>
+少なくとも正解カード等の
+ゲームごとの秘密情報は含めない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>23. サジェスト時のサーバー通信削減</h2>
+
+<div class="box">
+
+<pre>
+悪い構成
+
+「オル」
+↓
+サーバー検索
+
+「オルテ」
+↓
+サーバー検索
+
+「オルテニ」
+↓
+サーバー検索
+
+
+採用構成
+
+「オル」
+↓
+ブラウザ内検索
+
+「オルテ」
+↓
+ブラウザ内検索
+
+「オルテニ」
+↓
+ブラウザ内検索
+
+カード選択
+↓
+回答する
+
+この時点でサーバーへ送信
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+サジェスト操作そのものでは、
+不要なAPI・DBアクセスを発生させない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>24. 正解情報の秘匿</h2>
+
+<div class="box">
+
+<p>
+検索用カードデータがブラウザへ存在していても、
+現在のゲームでどのカードが正解かという情報は
+クライアントへ送信しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>正解カードIDを初期HTMLへ埋め込まない。</li>
+<li>正解カードIDを検索用静的データとは別に管理する。</li>
+<li>ゲーム開始レスポンスへ正解を含めない。</li>
+<li>回答判定はサーバー側で行う。</li>
+<li>正常な結果画面を表示するゲーム終了時に正解を公開する。</li>
+<li>Daily停止やデータ異常等による中断時は、正解を公開しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>25. ソロモードのサーバー利用</h2>
+
+<div class="box">
+
+<p>
+ソロモードもブラウザのみで完結させず、
+WorkersをAPI入口として利用し、
+正式な進行中ゲーム状態は
+<code>GameSessionDO</code>で管理する。
+</p>
+
+</div>
+
+<pre>
+ブラウザ
+
+ゲーム開始
+
+↓
+
+Worker
+
+対象範囲を確認
+正解候補を決定
+
+↓
+
+GameSessionDO
+
+正解・回答回数・履歴を保存
+ゲーム開始
+
+↓
+
+ブラウザ
+
+カードを回答
+
+↓
+
+Worker
+
+入力検証・DOへルーティング
+
+↓
+
+GameSessionDO
+
+回答検証
+正解と比較
+状態更新
+結果生成
+
+↓
+
+ブラウザ
+
+結果表示
+</pre>
+
+<hr>
+
+<h2>26. デイリーモード</h2>
+
+<div class="box">
+
+<p>
+デイリー正解カードは
+サーバー側のロジック・データを利用して管理する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>切り替え基準は日本時間5:00。</li>
+<li>同一デイリー期間ではD1の<code>daily_configs</code>に保存された同じ正解を使用する。</li>
+<li>各プレイヤーの進行状態は<code>GameSessionDO</code>で管理する。</li>
+<li>正解は正常なゲーム終了までクライアントへ公開しない。</li>
+<li>ログイン管理を行わないため再挑戦可能。</li>
+<li>Current Version変更時は、その時点の当日Dailyを自動停止する。</li>
+<li>停止中Dailyは新規開始・再開・回答・ヒントを継続させない。</li>
+<li>Daily停止時は結果画面へ移行せず、正解も公開しない。</li>
+<li>停止したdaily_keyは当日中に再開せず、次のJST 05:00以降の新daily_keyから通常利用可能とする。</li>
+</ul>
+
+</div>
+
+<div class="notice">
+<p>
+Daily停止状態はD1の<code>daily_controls</code>で管理し、
+詳細な運営操作・表示・エラーコードは「07 管理画面・運営操作」で定義する。
+</p>
+</div>
+
+<hr>
+
+<h2>27. 2人対戦</h2>
+
+<div class="box">
+
+<p>
+2人対戦では、
+<code>BattleRoomDO</code>を中心として
+同一ルームのリアルタイム状態を管理する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>両者のREADYを管理する。</li>
+<li>先攻をランダム決定する。</li>
+<li>現在の手番を管理する。</li>
+<li>回答回数を管理する。</li>
+<li>共通履歴を管理する。</li>
+<li>120秒のターン期限を管理する。</li>
+<li>30秒の再接続猶予を管理する。</li>
+<li>勝敗をサーバー側で確定する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>28. 2人出題</h2>
+
+<div class="box">
+
+<p>
+2人出題では、
+<code>ChallengeGameDO</code>が
+出題者の設定した正解カードと進行状態を保持する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+正解設定後は、
+出題者のブラウザが切断・退出しても
+回答者がゲームを継続できる構造とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>29. フロントエンド構造方針</h2>
+
+<div class="box">
+
+<p>
+フロントエンドは機能ごとに分離し、
+WordPress等の配置先へ依存しない構成とする。
+</p>
+
+</div>
+
+<pre>
+frontend/
+
+├─ index.html
+│
+├─ css/
+│   └─ shado-guesser.css
+│
+├─ js/
+│   ├─ app.js
+│   ├─ game.js
+│   ├─ api.js
+│   ├─ realtime.js
+│   ├─ search.js
+│   └─ ui/
+│
+└─ data/
+    └─ card-search-index.json
+</pre>
+
+<div class="notice">
+
+実際のビルド構成・ファイル名は
+実装時に調整可能とする。
+</div>
+
+<hr>
+
+<h2>30. バックエンド構造方針</h2>
+
+<div class="box">
+
+<p>
+常駐Node.jsアプリを中心とした
+<code>server.js</code> 構成ではなく、
+Workers・Durable Objects向けに処理を分離する。
+</p>
+
+</div>
+
+<pre>
+backend/
+
+├─ worker/
+│   ├─ api/
+│   ├─ game/
+│   ├─ daily/
+│   ├─ judgement/
+│   └─ errors/
+│
+├─ durable-objects/
+│   ├─ game-session/
+│   ├─ challenge-game/
+│   └─ battle-room/
+│
+├─ database/
+│   ├─ schema/
+│   ├─ migrations/
+│   └─ seed/
+│
+└─ config/
+</pre>
+
+<div class="notice">
+
+フォルダ構成は概念例とし、
+最終的な開発環境に合わせて整理する。
+</div>
+
+<hr>
+
+<h2>31. CSS設計方針</h2>
+
+<div class="box">
+
+<p>
+WordPressや他サイトへ移設した場合の
+CSS競合を防止するため、
+Shado Guesser専用クラスを使用する。
+</p>
+
+</div>
+
+<pre>
+.sg-game
+.sg-card-input
+.sg-answer-button
+.sg-history
+.sg-modal
+.sg-result
+</pre>
+
+<div class="rule">
+
+<strong>
+CSSクラスは原則として
+<code>sg-</code>
+プレフィックスを使用する。
+</strong>
+
+</div>
+
+<hr>
+
+<h2>32. グローバルCSSを避ける</h2>
+
+<div class="box">
+
+<p>
+ゲーム用CSSから、
+ホストサイト全体の要素を無条件に変更しない。
+</p>
+
+</div>
+
+<pre>
+避ける：
+
+body{
+    ...
+}
+
+button{
+    ...
+}
+
+
+基本：
+
+#sg-app .sg-answer-button{
+    ...
+}
+
+#sg-app .sg-card-input{
+    ...
+}
+</pre>
+
+<hr>
+
+<h2>33. JavaScript設計方針</h2>
+
+<div class="box">
+
+<ul>
+<li>ゲームルート内で処理を完結する。</li>
+<li>グローバル変数を極力作らない。</li>
+<li>UI処理とAPI処理を分離する。</li>
+<li>リアルタイム通信処理を分離する。</li>
+<li>検索処理を分離する。</li>
+<li>WordPress固有JavaScriptへ依存しない。</li>
+<li>Cloudflare固有処理をフロントエンド全体へ分散させない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>34. 接続先の設定化</h2>
+
+<div class="box">
+
+<p>
+API・WebSocket・お問い合わせページ等のURLを
+ゲームコード内の複数箇所へ直接記述しない。
+</p>
+
+</div>
+
+<pre>
+SG_CONFIG
+
+apiBaseUrl
+wsUrl
+contactUrl
+</pre>
+
+<div class="rule">
+
+<p>
+独立サイト・WordPress・将来の別環境で
+接続先が変わっても、
+設定変更だけで対応可能な構造とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>35. アセットパス</h2>
+
+<div class="box">
+
+<p>
+画像・CSS・JavaScript・検索用データ等について、
+特定サイトのルートパスへ過度に依存しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>独立サイト配置を考慮する。</li>
+<li>WordPress配下への配置を考慮する。</li>
+<li>カード画像取得元の変更を考慮する。</li>
+<li>設定変更によって移設可能な構造を目標とする。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>36. ゲームモード</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>モード</th>
+<th>概要</th>
+</tr>
+
+<tr>
+<td>ソロ</td>
+<td>ランダムに選ばれた正解カードを1人で推測する</td>
+</tr>
+
+<tr>
+<td>デイリー</td>
+<td>同一デイリー期間中の共通正解カードへ挑戦する</td>
+</tr>
+
+<tr>
+<td>2人出題</td>
+<td>1人が正解カードを設定し、もう1人が推測する</td>
+</tr>
+
+<tr>
+<td>2人対戦</td>
+<td>同じ正解カードを2人で交互に推測し、先に正解した側が勝利する</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>37. ユーザーアカウント</h2>
+
+<div class="box">
+
+<p>
+初期版では
+ユーザーアカウント機能を一切持たない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>会員登録なし。</li>
+<li>ログインなし。</li>
+<li>WordPressログイン連携なし。</li>
+<li>SNSログインなし。</li>
+<li>メールアドレス登録なし。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>38. ユーザー戦績の永続保存</h2>
+
+<div class="box">
+
+<p>
+初期版では、
+プレイヤー単位の過去戦績をD1へ永続保存しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>通算勝敗なし。</li>
+<li>通算正解率なし。</li>
+<li>デイリー連続記録なし。</li>
+<li>ユーザーランキングなし。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>39. 永続データと一時ゲーム状態の分離</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>データ</th>
+<th>基本管理先</th>
+</tr>
+
+<tr>
+<td>カードマスター</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>カードパック等のマスター</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>Data Version</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>Daily共通設定・停止状態</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>運営設定・管理監査ログ</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>エラーログ</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>検索用公開データ</td>
+<td>Version別静的ファイル</td>
+</tr>
+
+<tr>
+<td>Solo進行中状態</td>
+<td>GameSessionDO</td>
+</tr>
+
+<tr>
+<td>Daily個人進行状態</td>
+<td>GameSessionDO</td>
+</tr>
+
+<tr>
+<td>2人出題状態</td>
+<td>ChallengeGameDO</td>
+</tr>
+
+<tr>
+<td>2人対戦ルーム・READY・手番・共有履歴</td>
+<td>BattleRoomDO</td>
+</tr>
+
+<tr>
+<td>再接続状態</td>
+<td>ChallengeGameDO / BattleRoomDO</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>40. カードデータ</h2>
+
+<div class="box">
+
+<p>
+ゲームで利用するカード情報は
+D1上のカードマスターデータとして管理する。
+</p>
+
+<p>
+カード情報をHTML・JavaScriptへ
+個別にハードコードしない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+新カード・新カードパック追加時は、
+ゲームプログラム本体を大きく変更せず
+データ更新によって対応できる構造とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>41. 主なカード情報</h2>
+
+<div class="box">
+
+<ul>
+<li>カードID。</li>
+<li>カード名。</li>
+<li>カードパック。</li>
+<li>クラス。</li>
+<li>レアリティ。</li>
+<li>分類。</li>
+<li>タイプ。</li>
+<li>コスト。</li>
+<li>攻撃力。</li>
+<li>体力。</li>
+<li>キーワード能力。</li>
+<li>能力・効果テキスト。</li>
+<li>カード画像情報。</li>
+<li>トークン判定。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>42. カードデータバージョン</h2>
+
+<div class="box">
+
+<p>
+カードデータ更新によって
+進行中ゲームの判定内容が途中で変化しないよう、
+カードデータにバージョンを持たせる。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+ゲーム開始時点のデータバージョンを
+ゲーム終了まで使用する。
+</p>
+
+<p>
+内部識別子は<code>data_version_id</code>、
+人間が確認する公開Version表記は<code>version_code</code>
+（例：<code>2026-07-28-01</code>）として区別する。
+</p>
+
+</div>
+
+<pre>
+ゲーム開始
+Version A
+
+↓
+
+Version B 公開
+
+↓
+
+進行中ゲーム
+Version Aを維持
+
+新規ゲーム
+Version Bを利用
+</pre>
+
+<hr>
+
+<h2>43. 正式な回答履歴</h2>
+
+<div class="box">
+
+<p>
+回答履歴の正式な内容・順序は
+サーバー側で確定する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+Solo・Dailyでは<code>GameSessionDO</code>、
+2人出題では<code>ChallengeGameDO</code>、
+2人対戦では<code>BattleRoomDO</code>が
+進行中の正式履歴を管理する。
+</p>
+
+<p>
+2人対戦では、BattleRoomDO側で確定した共通履歴を
+両プレイヤーへ配信する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>44. セキュリティ基本方針</h2>
+
+<div class="box">
+
+<p>
+ログイン機能を持たない場合でも、
+クライアントから送られた値を
+無条件に信用しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>カードIDをサーバー側で検証する。</li>
+<li>回答対象範囲をサーバー側でも確認する。</li>
+<li>回答回数をサーバー側で管理する。</li>
+<li>対戦手番をサーバー側で確認する。</li>
+<li>ゲーム終了後の回答を拒否する。</li>
+<li>正解情報をクライアントから指定できないようにする。</li>
+<li>再接続トークン等の秘密情報を公開データへ含めない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>45. エラーログ</h2>
+
+<div class="box">
+
+<p>
+データ不具合・判定異常等が発生した場合、
+原因追跡用のエラーログをD1へ保存できる構造とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+ユーザー向けエラーIDと
+D1上の詳細ログを対応付ける。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+正解カードID・秘密情報・トークン・スタックトレース等を
+ユーザー向け画面へ直接表示しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>46. 対応端末</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>端末</th>
+<th>対応</th>
+</tr>
+
+<tr>
+<td>PC</td>
+<td>対応</td>
+</tr>
+
+<tr>
+<td>スマートフォン</td>
+<td>対応</td>
+</tr>
+
+<tr>
+<td>タブレット</td>
+<td>対応</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>47. ブラウザ動作</h2>
+
+<div class="box">
+
+<p>
+一般的なモダンブラウザでの利用を前提とする。
+</p>
+
+<ul>
+<li>PCブラウザ。</li>
+<li>iPhone等のスマートフォンブラウザ。</li>
+<li>Android系スマートフォンブラウザ。</li>
+<li>タブレットブラウザ。</li>
+</ul>
+
+</div>
+
+<div class="notice">
+
+最低対応ブラウザバージョンは
+実装後の動作確認結果をもとに確定する。
+</div>
+
+<hr>
+
+<h2>48. WordPress移設を考慮した通信</h2>
+
+<div class="box">
+
+<p>
+WordPress側のドメインと
+Cloudflare側のAPI接続先が異なる構成にも
+対応可能とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>API接続先を設定値として管理する。</li>
+<li>WebSocket接続先を設定値として管理する。</li>
+<li>お問い合わせURLを設定値として管理する。</li>
+<li>サーバー側で許可する接続元を適切に管理する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>49. iframe依存にしない</h2>
+
+<div class="box">
+
+<p>
+WordPressへの移設時、
+iframeを使用しなければ動作しない構造にはしない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+Shado GuesserのHTML・CSS・JavaScriptを
+WordPress本文領域へ直接組み込める構造を基本とする。
+</p>
+
+</div>
+
+<div class="notice">
+
+必要に応じてiframe方式を選択できる余地は残すが、
+ゲーム本体をiframe前提では設計しない。
+</div>
+
+<hr>
+
+<h2>50. Cloudflare依存部分の分離</h2>
+
+<div class="box">
+
+<p>
+初期版ではCloudflareを採用するが、
+ゲームロジック全体を
+Cloudflare専用コードと密結合させない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+以下を可能な限り分離する。
+</p>
+
+<ul>
+<li>ゲームルール。</li>
+<li>カード判定ロジック。</li>
+<li>UI。</li>
+<li>データアクセス処理。</li>
+<li>Cloudflare Workers固有処理。</li>
+<li>Durable Objects固有処理。</li>
+</ul>
+
+</div>
+
+<div class="notice">
+
+将来的にインフラを変更する場合でも、
+ゲームルール・判定仕様・UI全体を
+作り直さなくて済む構造を目標とする。
+</div>
+
+<hr>
+
+<h2>51. 初期版で実装しないもの</h2>
+
+<div class="box">
+
+<ul>
+<li>ユーザー登録。</li>
+<li>ログイン。</li>
+<li>WordPressアカウント連携。</li>
+<li>SNSログイン。</li>
+<li>個人別戦績保存。</li>
+<li>ランキング。</li>
+<li>レーティング。</li>
+<li>ランダムマッチ。</li>
+<li>対戦観戦。</li>
+<li>開始済み対戦への第三者途中参加。</li>
+<li>常時稼働VPSを必須とする構成。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>52. コストを抑えるための基本方針</h2>
+
+<div class="box">
+
+<p>
+Shado Guesserでは、
+ゲーム性を損なわない範囲で
+不要なサーバー処理・DBアクセス・リアルタイム通信を減らす。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>サジェストはブラウザ内検索を基本とする。</li>
+<li>入力1文字ごとにDB検索しない。</li>
+<li>120秒タイマーを毎秒サーバー配信しない。</li>
+<li>静的データと動的データを分離する。</li>
+<li>回答等、正式処理が必要なタイミングでサーバーを利用する。</li>
+<li>リアルタイム通信は必要なイベントを中心に送信する。</li>
+<li>WebSocket Hibernationを活用可能な構造とする。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>53. システム全体のデータフロー</h2>
+
+<div class="box">
+
+<pre>
+ユーザー
+  │
+  ▼
+ブラウザ
+  │
+  ├─ UI表示
+  ├─ サジェストローカル検索
+  │
+  │
+  └──────── API ──────────────┐
+                               ▼
+                            Workers
+                               │
+                               ├─ D1
+                               │   ├─カード・マスター
+                               │   ├─Data Version
+                               │   └─Daily / 運営設定
+                               │
+                               └─ Durable Objects
+                                   ├─ GameSessionDO
+                                   │   └─ Solo / Daily
+                                   ├─ ChallengeGameDO
+                                   │   └─ 2人出題
+                                   └─ BattleRoomDO
+                                       └─ 2人対戦
+                                            │
+                                            └─ WebSocket
+                                               （2人モード）
+</pre>
+
+</div>
+
+<hr>
+
+<h2>54. 設計書構成</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>番号</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td>01</td>
+<td>システム概要</td>
+</tr>
+
+<tr>
+<td>02</td>
+<td>ゲームルール</td>
+</tr>
+
+<tr>
+<td>03</td>
+<td>判定仕様</td>
+</tr>
+
+<tr>
+<td>04</td>
+<td>データ設計</td>
+</tr>
+
+<tr>
+<td>05</td>
+<td>画面・UI設計</td>
+</tr>
+
+<tr>
+<td>06</td>
+<td>サーバー・Cloudflare設計</td>
+</tr>
+
+<tr>
+<td>07</td>
+<td>管理画面設計</td>
+</tr>
+
+<tr>
+<td>08</td>
+<td>データ更新手順</td>
+</tr>
+
+<tr>
+<td>09</td>
+<td>将来拡張・残課題</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>55. 権利・名称表記方針</h2>
+
+<div class="box">
+
+<p>
+Shado Guesser自身の
+ゲーム・サイト内のプロジェクト表記として、
+以下を使用する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>©Shado Guesser</strong>
+
+</div>
+
+<div class="notice">
+
+<p>
+Shadowverse: Worlds Beyondのカード名・カード画像・商標等、
+第三者が権利を有する素材について、
+「©Shado Guesser」がそれらの権利を示すものではない。
+</p>
+
+<p>
+第三者の権利に関する必要な表記については、
+公開時に確認して適切に表示する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>56. ©Shado Guesserの表示</h2>
+
+<div class="box">
+
+<p>
+ゲームページ下部または
+サイト共通フッター等への表示を基本候補とする。
+</p>
+
+</div>
+
+<pre>
+┌──────────────────────────────┐
+│                              │
+│        Shado Guesser         │
+│                              │
+└──────────────────────────────┘
+
+          ©Shado Guesser
+</pre>
+
+<hr>
+
+<h2>57. 確定事項</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>確定仕様</th>
+</tr>
+
+<tr>
+<td>システム名</td>
+<td>Shado Guesser</td>
+</tr>
+
+<tr>
+<td>形式</td>
+<td>独立Webアプリケーション</td>
+</tr>
+
+<tr>
+<td>WordPress依存</td>
+<td>しない</td>
+</tr>
+
+<tr>
+<td>WordPress移設</td>
+<td>可能な構造とする</td>
+</tr>
+
+<tr>
+<td>ゲームルート</td>
+<td><code>#sg-app</code> 内を基本</td>
+</tr>
+
+<tr>
+<td>CSS</td>
+<td><code>sg-</code> プレフィックス</td>
+</tr>
+
+<tr>
+<td>フロントエンド配信</td>
+<td>Cloudflare Pagesを基本</td>
+</tr>
+
+<tr>
+<td>API入口・D1アクセス・DOルーティング</td>
+<td>Cloudflare Workers</td>
+</tr>
+
+<tr>
+<td>永続データ</td>
+<td>Cloudflare D1</td>
+</tr>
+
+<tr>
+<td>進行中ゲーム状態</td>
+<td>全モードでDurable Objects</td>
+</tr>
+
+<tr>
+<td>2人モードのリアルタイム通信</td>
+<td>WebSocket</td>
+</tr>
+
+<tr>
+<td>WebSocket待機時</td>
+<td>Hibernation利用を基本</td>
+</tr>
+
+<tr>
+<td>常駐Node.js</td>
+<td>初期版では不要</td>
+</tr>
+
+<tr>
+<td>VPS</td>
+<td>初期版では不要</td>
+</tr>
+
+<tr>
+<td>本番SQLiteファイル</td>
+<td>直接配置方式は採用しない</td>
+</tr>
+
+<tr>
+<td>カードDB</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>エラーログ</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>サジェスト</td>
+<td>検索用静的データによるブラウザ内検索</td>
+</tr>
+
+<tr>
+<td>正式なゲーム状態</td>
+<td>サーバー側を正とする</td>
+</tr>
+
+<tr>
+<td>正解カード</td>
+<td>サーバー側で保持</td>
+</tr>
+
+<tr>
+<td>回答判定</td>
+<td>サーバー側</td>
+</tr>
+
+<tr>
+<td>回答履歴</td>
+<td>サーバー側で正式内容を確定</td>
+</tr>
+
+<tr>
+<td>対戦ルーム</td>
+<td>Durable Objects</td>
+</tr>
+
+<tr>
+<td>ターン時間表示</td>
+<td>ブラウザで表示</td>
+</tr>
+
+<tr>
+<td>正式な時間切れ判定</td>
+<td>サーバー側</td>
+</tr>
+
+<tr>
+<td>デイリー更新</td>
+<td>日本時間5:00</td>
+</tr>
+
+<tr>
+<td>Current Version変更時のDaily</td>
+<td>当日分を自動停止し、次のJST 05:00まで再開しない</td>
+</tr>
+
+<tr>
+<td>ユーザー登録</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>ログイン</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>ユーザー戦績保存</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>観戦</td>
+<td>初期版なし</td>
+</tr>
+
+<tr>
+<td>途中参加</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>プロジェクト表記</td>
+<td>©Shado Guesser</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>58. 01で詳細定義しない内容</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>内容</th>
+<th>設計書</th>
+</tr>
+
+<tr>
+<td>回答回数・勝敗・出題範囲等</td>
+<td>02 ゲームルール</td>
+</tr>
+
+<tr>
+<td>カード比較アルゴリズム</td>
+<td>03 判定仕様</td>
+</tr>
+
+<tr>
+<td>D1テーブル構造・各マスター</td>
+<td>04 データ設計</td>
+</tr>
+
+<tr>
+<td>検索用静的カードデータ構造</td>
+<td>04 データ設計</td>
+</tr>
+
+<tr>
+<td>画面・入力・履歴・モーダル</td>
+<td>05 画面・UI設計</td>
+</tr>
+
+<tr>
+<td>Workers API</td>
+<td>06 サーバー・Cloudflare設計</td>
+</tr>
+
+<tr>
+<td>Durable Objects詳細</td>
+<td>06 サーバー・Cloudflare設計</td>
+</tr>
+
+<tr>
+<td>WebSocket通信イベント</td>
+<td>06 サーバー・Cloudflare設計</td>
+</tr>
+
+<tr>
+<td>再接続・タイマー実装</td>
+<td>06 サーバー・Cloudflare設計</td>
+</tr>
+
+<tr>
+<td>管理操作・Daily停止</td>
+<td>07 管理画面・運営操作</td>
+</tr>
+
+<tr>
+<td>カードデータ更新</td>
+<td>08 データ更新手順</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>59. 今後の設計方針</h2>
+
+<div class="box">
+
+<div class="rule">
+
+<ol>
+<li>ゲームとして正しく動作すること。</li>
+<li>正式なゲーム状態をサーバー側で管理すること。</li>
+<li>正解情報をゲーム終了まで秘匿すること。</li>
+<li>PC・スマートフォン双方で操作しやすいこと。</li>
+<li>不要なAPI・DB通信を減らすこと。</li>
+<li>低コストで運営可能な構造とすること。</li>
+<li>WordPressへの移設を容易にすること。</li>
+<li>新カード・新パックへ対応しやすいこと。</li>
+<li>将来的なインフラ変更にも対応しやすくすること。</li>
+</ol>
+
+</div>
+
+</div>
+
+<hr>
+
+<h2>60. 本設計書の位置付け</h2>
+
+<div class="box">
+
+<p>
+本書「01 システム概要」は、
+Shado Guesser全体の最上位システム方針を定義する。
+</p>
+
+<p>
+02以降の設計書は、
+原則として以下の構成を前提とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<pre>
+独立Webアプリ
++
+Cloudflare Pages
++
+Cloudflare Workers
++
+Cloudflare D1
++
+Durable Objects
++
+WebSocket
++
+WordPress移設可能
+</pre>
+
+</div>
+
+<hr>
+
+<p class="small">
+Shado Guesser 基本設計書<br>
+01 システム概要<br><br>
+©Shado Guesser
+</p>
+
+</body>
+</html>

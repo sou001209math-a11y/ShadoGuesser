@@ -1,0 +1,2315 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Shado Guesser 基本設計書 - 09 将来拡張・残課題</title>
+
+<style>
+
+body{
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    color:#222;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+}
+
+h1{
+    border-bottom:4px solid #3f51b5;
+    padding-bottom:10px;
+}
+
+h2{
+    margin-top:45px;
+    border-left:8px solid #3f51b5;
+    padding-left:12px;
+}
+
+h3{
+    margin-top:30px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th,
+td{
+    border:1px solid #cccccc;
+    padding:10px;
+    vertical-align:top;
+}
+
+th{
+    background:#3f51b5;
+    color:white;
+}
+
+.box{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+}
+
+.notice{
+    background:#fff8e1;
+    border-left:6px solid #ffc107;
+    padding:15px;
+    margin-top:20px;
+}
+
+.rule{
+    background:#e8eaf6;
+    border-left:6px solid #3f51b5;
+    padding:15px;
+    margin-top:20px;
+}
+
+.warning{
+    background:#ffebee;
+    border-left:6px solid #d32f2f;
+    padding:15px;
+    margin-top:20px;
+}
+
+.example{
+    background:#e8f5e9;
+    border-left:6px solid #4caf50;
+    padding:15px;
+    margin-top:20px;
+}
+
+.future-high{
+    background:#e8f5e9;
+    border-left:6px solid #2e7d32;
+    padding:15px;
+    margin-top:20px;
+}
+
+.future-normal{
+    background:#e3f2fd;
+    border-left:6px solid #1976d2;
+    padding:15px;
+    margin-top:20px;
+}
+
+pre{
+    background:#222;
+    color:#f5f5f5;
+    padding:20px;
+    border-radius:8px;
+    overflow:auto;
+    line-height:1.6;
+}
+
+code{
+    background:#eeeeee;
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.small{
+    color:#777;
+    font-size:0.9em;
+}
+
+@media(max-width:700px){
+
+    body{
+        padding:18px;
+    }
+
+    table{
+        font-size:0.9em;
+    }
+
+    th,
+    td{
+        padding:7px;
+    }
+
+    pre{
+        padding:12px;
+        font-size:0.85em;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Shado Guesser 基本設計書</h1>
+
+<p>
+<strong>09：将来拡張・残課題</strong>
+</p>
+
+<p>
+本設計書では、
+Shado Guesser初期版では実装しない機能、
+将来的に追加を検討する機能、
+および将来機能追加時にも維持すべき
+基本設計原則を整理する。
+</p>
+
+<p>
+本書に記載された将来機能は、
+明示的に「実装予定」とされたものを除き、
+<strong>実装を保証するものではない。</strong>
+</p>
+
+<hr>
+
+<h2>1. 本書の位置づけ</h2>
+
+<div class="box">
+
+<p>
+01～08では、
+Shado Guesser初期版を実装するために必要な
+基本仕様を定義した。
+</p>
+
+<p>
+09では、
+初期実装に必要のない機能を無理に組み込まず、
+将来追加できる可能性だけを整理する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+将来機能のために
+初期版の実装を過度に複雑化しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>2. 将来機能の分類</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>分類</th>
+<th>意味</th>
+</tr>
+
+<tr>
+<td>優先度高</td>
+<td>初期版完成後、比較的優先して検討する機能</td>
+</tr>
+
+<tr>
+<td>将来候補</td>
+<td>必要性が出た場合に検討する機能</td>
+</tr>
+
+<tr>
+<td>初期版対象外</td>
+<td>現在は実装しないことが確定している機能</td>
+</tr>
+
+<tr>
+<td>調査項目</td>
+<td>実際のデータや運用開始後に判断するもの</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>3. 優先度の考え方</h2>
+
+<div class="rule">
+
+<p>
+将来機能の優先度は、
+ゲーム体験への効果、
+実装コスト、
+運営負荷、
+既存設計への影響を考慮して決定する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>4. 優先度高：ランダムマッチ</h2>
+
+<div class="future-high">
+
+<strong>
+ランダムマッチ機能は、
+初期版完成後の将来対応候補の中で
+優先度を高めに設定する。
+</strong>
+
+</div>
+
+<p>
+ルームIDを知人へ共有する通常Battleとは別に、
+対戦相手を自動的に探してBattleを開始できる機能を追加する。
+</p>
+
+<hr>
+
+<h2>5. ランダムマッチの基本画面</h2>
+
+<div class="box">
+
+<pre>
+ランダムマッチ
+
+回答範囲
+ローテーション
+
+[ 対戦相手を探す ]
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+ランダムマッチでは
+回答範囲選択UIを設けない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>6. ランダムマッチの回答範囲</h2>
+
+<div class="rule">
+
+<strong>
+ランダムマッチの回答範囲は
+ローテーション固定とする。
+</strong>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答範囲</th>
+<th>ランダムマッチ</th>
+</tr>
+
+<tr>
+<td>ローテーション</td>
+<td>○</td>
+</tr>
+
+<tr>
+<td>アンリミテッド</td>
+<td>×</td>
+</tr>
+
+<tr>
+<td>全カード</td>
+<td>×</td>
+</tr>
+
+<tr>
+<td>カスタム</td>
+<td>×</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>7. ランダムマッチとData Version</h2>
+
+<div class="box">
+
+<p>
+マッチングする2人は、
+同じ
+<code>data_version_id</code>
+を使用できる状態である必要がある。
+</p>
+
+</div>
+
+<pre>
+Player A
+
+Rotation
+Data Version A
+
+
+Player B
+
+Rotation
+Data Version A
+
+
+↓
+
+Match可能
+</pre>
+
+<div class="warning">
+
+<pre>
+Player A
+Version A
+
+Player B
+Version B
+
+↓
+
+そのままMatchしない
+</pre>
+
+</div>
+
+<hr>
+
+<h2>8. マッチング待機中のVersion変更</h2>
+
+<div class="box">
+
+<p>
+Current Version変更によって
+待機開始時のVersionがCurrentではなくなった場合は、
+古い条件の待機Ticketをそのまま新規マッチへ使用しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+実装時には、
+待機Ticketを無効化して再参加させる、
+または新Current Version条件へ再登録する等、
+Version混在を防ぐ処理を行う。
+</p>
+
+</div>
+
+<hr>
+
+<h2>9. ランダムマッチ開始フロー</h2>
+
+<div class="box">
+
+<pre>
+Player
+
+[ 対戦相手を探す ]
+
+↓
+
+Matchmaking参加要求
+
+↓
+
+サーバー
+
+Rotation確認
+
+Data Version確認
+
+↓
+
+Matchmaking Ticket発行
+
+↓
+
+待機
+
+↓
+
+同じ条件のPlayer発見
+
+↓
+
+BattleRoomDO作成
+
+↓
+
+両プレイヤーをBattleへ接続
+
+↓
+
+READY
+
+↓
+
+通常Battle開始
+</pre>
+
+</div>
+
+<hr>
+
+<h2>10. Matchmaking Ticket</h2>
+
+<div class="box">
+
+<p>
+ランダムマッチ待機中のプレイヤーは、
+一時的なMatchmaking Ticketで管理する。
+</p>
+
+</div>
+
+<pre>
+matchmakingTicket
+
+playerSession
+
+data_version_id
+
+range_mode = rotation
+
+createdAt
+</pre>
+
+<div class="warning">
+
+<p>
+Ticket内にゲーム正解を保持する必要はない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>11. ランダムマッチのログイン</h2>
+
+<div class="rule">
+
+<strong>
+初期のランダムマッチ案では
+ユーザーアカウントを必須としない。
+</strong>
+
+</div>
+
+<p>
+一時的なセッション情報だけで参加可能とする。
+</p>
+
+<hr>
+
+<h2>12. ランダムマッチのレート</h2>
+
+<div class="rule">
+
+<p>
+初期のランダムマッチには
+レーティングシステムを導入しない。
+</p>
+
+</div>
+
+<pre>
+MMR
+なし
+
+Rating
+なし
+
+Rank
+なし
+</pre>
+
+<hr>
+
+<h2>13. ランダムマッチの戦績</h2>
+
+<div class="box">
+
+<p>
+ユーザーアカウントを導入しないため、
+初期のランダムマッチでは
+個人戦績を永続保存しない。
+</p>
+
+</div>
+
+<pre>
+勝率
+なし
+
+通算勝利数
+なし
+
+連勝数
+なし
+
+対戦履歴
+なし
+</pre>
+
+<hr>
+
+<h2>14. ランダムマッチ待機キャンセル</h2>
+
+<div class="rule">
+
+<p>
+マッチ成立前であれば、
+プレイヤーは待機をキャンセル可能とする。
+</p>
+
+</div>
+
+<pre>
+対戦相手を探しています...
+
+[ キャンセル ]
+</pre>
+
+<hr>
+
+<h2>15. 待機中切断</h2>
+
+<div class="box">
+
+<p>
+マッチング待機中に
+ページを閉じる、
+通信が切れる等した場合は
+待機状態を解除する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+Battle開始後の30秒再接続仕様を
+Matchmaking待機中には必須適用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>16. Match成立後</h2>
+
+<div class="box">
+
+<p>
+Match成立後は、
+新しい対戦ルールを作成せず、
+06で定義した通常のBattleへ移行する。
+</p>
+
+</div>
+
+<pre>
+Matchmaking
+
+↓
+
+Match成立
+
+↓
+
+BattleRoomDO
+
+↓
+
+既存Battle仕様
+</pre>
+
+<hr>
+
+<h2>17. ランダムマッチで引き継ぐBattle仕様</h2>
+
+<div class="box">
+
+<ul>
+<li>2人対戦。</li>
+<li>観戦者なし。</li>
+<li>両者READY後開始。</li>
+<li>先攻ランダム。</li>
+<li>交互手番。</li>
+<li>各10回答。</li>
+<li>1手番120秒。</li>
+<li>時間切れランダムGuess。</li>
+<li>最初の正解者が勝利。</li>
+<li>20回答終了で引き分け。</li>
+<li>WebSocket。</li>
+<li>stateVersion。</li>
+<li>requestId。</li>
+<li>30秒再接続。</li>
+<li>明示的退出は即敗北。</li>
+<li>正解はサーバー管理。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>18. ランダムマッチ成立後のキャンセル</h2>
+
+<div class="rule">
+
+<p>
+BattleRoomへ移行した後は、
+単なるMatchmakingキャンセルではなく
+通常Battleの退出ルールを適用する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>19. ランダムマッチのBot</h2>
+
+<div class="rule">
+
+<strong>
+初期のランダムマッチ案では
+Bot対戦を行わない。
+</strong>
+
+</div>
+
+<pre>
+対戦相手がいない
+
+↓
+
+AIと自動Match
+
+×
+
+</pre>
+
+<hr>
+
+<h2>20. 同一相手との連続Match</h2>
+
+<div class="box">
+
+<p>
+同じ相手との連続マッチングを防止する機能は
+初期のランダムマッチ必須要件とはしない。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+利用者数や運用状況を確認後、
+必要であれば将来的に対策を追加する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>21. マッチング待機時間</h2>
+
+<div class="box">
+
+<p>
+特定時間経過後にBotへ切り替える等の処理は行わない。
+</p>
+
+</div>
+
+<p>
+待機時間の表示方法や
+自動キャンセル時間については
+ランダムマッチ実装時に決定する。
+</p>
+
+<hr>
+
+<h2>22. Matchmakingのサーバー構成</h2>
+
+<div class="box">
+
+<p>
+Matchmaking待機状態を管理する
+サーバーコンポーネントを将来的に追加する。
+</p>
+
+</div>
+
+<pre>
+Browser
+
+↓
+
+Worker
+
+↓
+
+Matchmaking State
+
+↓
+
+Match成立
+
+↓
+
+BattleRoomDO
+</pre>
+
+<div class="notice">
+
+<p>
+Matchmaking Stateの具体的なCloudflare構成は
+実装時に決定する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>23. Matchmakingで変更しないもの</h2>
+
+<div class="rule">
+
+<p>
+ランダムマッチ追加によって
+既存のRoom ID Battleを廃止しない。
+</p>
+
+</div>
+
+<pre>
+2人対戦
+
+├─ Room IDで知人と対戦
+│
+└─ ランダムマッチで対戦相手を検索
+</pre>
+
+<hr>
+
+<h2>24. 将来候補：観戦者モード</h2>
+
+<div class="future-normal">
+
+<p>
+2人対戦を第三者が閲覧できる
+観戦者モードは将来候補とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+初期版では実装しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>25. 観戦者追加時の原則</h2>
+
+<div class="box">
+
+<p>
+観戦者を追加する場合でも、
+ゲーム終了前の正解情報を
+観戦者へ公開してはならない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+観戦者にはゲーム操作権限を与えない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>26. 将来候補：ユーザーアカウント</h2>
+
+<div class="future-normal">
+
+<p>
+ユーザーアカウントは将来候補とする。
+</p>
+
+</div>
+
+<p>
+初期版ではログインなしで全基本ゲームを利用可能とする。
+</p>
+
+<hr>
+
+<h2>27. アカウント追加時</h2>
+
+<div class="box">
+
+<p>
+将来アカウントを導入する場合でも、
+既存のゲームセッション設計と
+ゲーム判定ロジックを可能な限り分離する。
+</p>
+
+</div>
+
+<pre>
+Account
+
+↓
+
+Player Profile
+
+
+Game
+
+↓
+
+Game Session
+</pre>
+
+<div class="rule">
+
+<p>
+「ログインしていないとゲーム自体が成立しない」
+構造へ不用意に変更しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>28. 将来候補：戦績</h2>
+
+<div class="future-normal">
+
+<p>
+アカウント機能を導入した場合、
+以下を将来的に検討可能とする。
+</p>
+
+</div>
+
+<ul>
+<li>Battle勝敗。</li>
+<li>勝率。</li>
+<li>対戦回数。</li>
+<li>Solo記録。</li>
+<li>Daily結果。</li>
+</ul>
+
+<div class="rule">
+
+<p>
+初期版では永続保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>29. 将来候補：ランキング</h2>
+
+<div class="future-normal">
+
+<p>
+ランキング機能は将来候補とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+初期版では実装しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>30. ランキングとランダムマッチ</h2>
+
+<div class="box">
+
+<p>
+ランダムマッチを実装しても、
+同時にランキングやレーティングを
+導入する必要はない。
+</p>
+
+</div>
+
+<pre>
+Random Match
+
+↓
+
+まずは単純対戦
+
+
+将来必要なら
+
+↓
+
+Rating / Ranking
+</pre>
+
+<hr>
+
+<h2>31. 将来候補：Dailyストリーク</h2>
+
+<div class="future-normal">
+
+<p>
+連続Daily参加日数等の
+ストリーク機能は将来候補とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+初期版ではユーザー識別を永続化しないため実装しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>32. Daily停止日とストリーク</h2>
+
+<div class="box">
+
+<p>
+将来ストリークを実装する場合は、
+07で定義したDaily停止日を
+連続記録へどのように扱うかを別途設計する。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+現時点では決定しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>33. 将来候補：複数管理者権限</h2>
+
+<div class="future-normal">
+
+<p>
+07では管理者権限を1種類としたが、
+複数人運営となった場合は
+権限分離を検討する。
+</p>
+
+</div>
+
+<pre>
+Viewer
+
+Data Manager
+
+Operator
+
+Administrator
+</pre>
+
+<div class="rule">
+
+<p>
+初期版では実装しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>34. 将来候補：進行中ゲーム確認</h2>
+
+<div class="future-normal">
+
+<p>
+管理画面から
+gameId / roomIdを指定して
+進行中ゲーム状態を確認する調査機能を
+将来追加可能とする。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+確認機能を追加しても、
+管理者が回答回数・正解・勝敗等を
+自由編集する機能とはしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>35. 将来候補：緊急全停止</h2>
+
+<div class="future-normal">
+
+<p>
+07のメンテナンスモードより強い
+緊急停止機能を将来検討可能とする。
+</p>
+
+</div>
+
+<pre>
+通常Maintenance
+
+新規ゲーム停止
+既存ゲーム継続
+
+
+将来のEmergency Stop
+
+必要に応じて
+ゲーム処理全体を停止
+</pre>
+
+<div class="rule">
+
+<p>
+初期版では実装しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>36. 緊急停止追加時の注意</h2>
+
+<div class="box">
+
+<p>
+緊急停止によってBattleが終了する場合、
+どちらか一方を勝者・敗者として扱わない等、
+専用の中断状態を設計する必要がある。
+</p>
+
+</div>
+
+<hr>
+
+<h2>37. 将来候補：Source Data自動取得</h2>
+
+<div class="future-normal">
+
+<p>
+08で定義した公式構造化Source Data取得を
+将来自動化することは可能とする。
+</p>
+
+</div>
+
+<pre>
+定期取得
+
+↓
+
+Source Archive
+
+↓
+
+Importer
+
+↓
+
+Validation
+
+↓
+
+Draft
+</pre>
+
+<hr>
+
+<h2>38. Source自動取得でも自動公開しない</h2>
+
+<div class="rule">
+
+<p>
+Source Data取得を自動化しても、
+自動でCurrent Versionへ変更しない。
+</p>
+
+</div>
+
+<pre>
+Auto Fetch
+○
+
+Auto Import
+将来可能
+
+Auto Draft
+将来可能
+
+Auto Current Switch
+×
+</pre>
+
+<hr>
+
+<h2>39. AIを正式Sourceにしない原則</h2>
+
+<div class="rule">
+
+<p>
+将来データ更新機能を拡張しても、
+08で定義した
+「AIを正式カードデータソースにしない」
+原則を維持する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>40. 将来候補：古いData Versionの自動削除</h2>
+
+<div class="future-normal">
+
+<p>
+Data Versionが多数蓄積した場合は、
+過去Versionの保管ポリシーを将来検討する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+初期版では自動削除しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>41. 旧Version削除時の条件</h2>
+
+<div class="box">
+
+<p>
+将来削除機能を実装する場合は、
+最低限以下を考慮する。
+</p>
+
+</div>
+
+<ul>
+<li>進行中ゲームが参照していない。</li>
+<li>対応Search Indexとの整合。</li>
+<li>ロールバック対象として必要ない。</li>
+<li>Source Archiveとの追跡関係。</li>
+</ul>
+
+<hr>
+
+<h2>42. 将来候補：旧Search Index整理</h2>
+
+<div class="future-normal">
+
+<p>
+Data Version削除ポリシーを導入する場合は、
+対応するVersion別Search Indexの
+整理方法も同時に設計する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>43. 将来候補：進化後情報の活用</h2>
+
+<div class="future-normal">
+
+<p>
+08ではSource Archiveへ保持する
+<code>evo</code>
+情報を、
+将来Shado Guesserで利用することを検討可能とする。
+</p>
+
+</div>
+
+<p>
+例：
+</p>
+
+<ul>
+<li>進化後画像表示。</li>
+<li>進化後能力テキスト表示。</li>
+<li>進化後情報を使用した別ゲームモード。</li>
+</ul>
+
+<hr>
+
+<h2>44. 進化後情報と既存判定</h2>
+
+<div class="rule">
+
+<p>
+進化後機能を追加しても、
+既存の基本判定仕様を
+黙って変更しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>45. 将来候補：新ゲームモード</h2>
+
+<div class="future-normal">
+
+<p>
+カードデータ基盤を利用して、
+将来的に新しいゲームモードを追加可能とする。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+具体的なモード内容は現時点では定義しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>46. 新ゲームモード追加時</h2>
+
+<div class="box">
+
+<p>
+新モードが既存ルールと異なる場合は、
+既存のSolo / Daily / Challenge / Battleを変更するのではなく、
+モード固有仕様として分離する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>47. 将来候補：WordPress正式組み込み</h2>
+
+<div class="future-normal">
+
+<p>
+Shado Guesserを外部WordPressサイトへ
+正式に組み込む構成を将来検討可能とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+ゲームサーバー・D1・Durable Objects等は
+WordPressから独立した構成を維持する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>48. WordPress組み込み原則</h2>
+
+<div class="box">
+
+<pre>
+WordPress
+
+Header
+Navigation
+
+↓
+
+Shado Guesser
+#sg-app
+
+↓
+
+Footer
+</pre>
+
+</div>
+
+<p>
+WordPressは外側のページ構成を担当し、
+ゲーム状態管理を担当しない。
+</p>
+
+<hr>
+
+<h2>49. iframe</h2>
+
+<div class="rule">
+
+<p>
+WordPress組み込み時も
+iframeを必須構成とはしない。
+</p>
+
+</div>
+
+<p>
+可能な限り
+独立したアプリコンポーネントとして
+ページ内へ配置できる構造を維持する。
+</p>
+
+<hr>
+
+<h2>50. CSS衝突防止</h2>
+
+<div class="box">
+
+<p>
+将来外部サイトへ組み込む場合を考慮し、
+ゲーム本体の
+<code>sg-</code>
+プレフィックスを維持する。
+</p>
+
+</div>
+
+<pre>
+#sg-app
+
+.sg-game
+
+.sg-card
+
+.sg-modal
+</pre>
+
+<hr>
+
+<h2>51. 将来候補：通知機能</h2>
+
+<div class="future-normal">
+
+<p>
+メンテナンスや新機能等の
+ゲーム内お知らせ機能は将来候補とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+初期版の必須機能とはしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>52. 将来候補：外部監視・通知</h2>
+
+<div class="future-normal">
+
+<p>
+error_logs等を利用して、
+重大エラーを運営者へ通知する仕組みを
+将来追加可能とする。
+</p>
+
+</div>
+
+<p>
+例：
+</p>
+
+<ul>
+<li>一定数以上のData Error。</li>
+<li>Daily生成失敗。</li>
+<li>Current Version異常。</li>
+<li>Battle内部エラー増加。</li>
+</ul>
+
+<hr>
+
+<h2>53. 初期版で実装しない機能一覧</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>機能</th>
+<th>初期版</th>
+</tr>
+
+<tr>
+<td>ランダムマッチ</td>
+<td>実装しない・将来優先候補</td>
+</tr>
+
+<tr>
+<td>観戦者</td>
+<td>実装しない</td>
+</tr>
+
+<tr>
+<td>ユーザーアカウント</td>
+<td>実装しない</td>
+</tr>
+
+<tr>
+<td>ランキング</td>
+<td>実装しない</td>
+</tr>
+
+<tr>
+<td>レーティング</td>
+<td>実装しない</td>
+</tr>
+
+<tr>
+<td>個人戦績</td>
+<td>永続保存しない</td>
+</tr>
+
+<tr>
+<td>Dailyストリーク</td>
+<td>実装しない</td>
+</tr>
+
+<tr>
+<td>Bot Battle</td>
+<td>実装しない</td>
+</tr>
+
+<tr>
+<td>複数管理者権限</td>
+<td>実装しない</td>
+</tr>
+
+<tr>
+<td>緊急全停止</td>
+<td>実装しない</td>
+</tr>
+
+<tr>
+<td>Source完全自動更新</td>
+<td>実装しない</td>
+</tr>
+
+<tr>
+<td>自動Current切替</td>
+<td>実装しない</td>
+</tr>
+
+<tr>
+<td>古いVersion自動削除</td>
+<td>実装しない</td>
+</tr>
+
+<tr>
+<td>進行中ゲーム編集</td>
+<td>実装しない</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>54. 将来機能追加時の共通原則</h2>
+
+<div class="rule">
+
+<p>
+将来機能を追加する場合でも、
+01～08で確定した以下の基本原則を維持する。
+</p>
+
+</div>
+
+<ul>
+<li>サーバーをゲーム状態のSource of Truthとする。</li>
+<li>正解カードをゲーム終了前にクライアントへ公開しない。</li>
+<li>正式判定をサーバー側で行う。</li>
+<li>ゲーム開始時のData Versionを固定する。</li>
+<li>Published Versionを書き換えない。</li>
+<li>未知データを推測しない。</li>
+<li>公式構造化Source Dataを正式データソースとする。</li>
+<li>AIを正式カードデータソースにしない。</li>
+<li>進行中ゲームをCurrent Version変更で変化させない。</li>
+</ul>
+
+<hr>
+
+<h2>55. API互換性</h2>
+
+<div class="box">
+
+<p>
+将来機能追加によって
+既存APIへ破壊的変更が必要な場合は、
+API Versionを分離する。
+</p>
+
+</div>
+
+<pre>
+/api/v1/
+
+↓
+
+必要なら
+
+/api/v2/
+</pre>
+
+<div class="rule">
+
+<p>
+既存クライアントを黙って壊す変更を避ける。
+</p>
+
+</div>
+
+<hr>
+
+<h2>56. Data Version互換性</h2>
+
+<div class="box">
+
+<p>
+将来カードデータ構造を拡張しても、
+既存Published Versionを
+新構造へ自動上書きしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>57. ゲームルール変更</h2>
+
+<div class="box">
+
+<p>
+将来ゲームルール自体を変更する場合は、
+既存設計書の該当仕様を
+正式に改訂してから実装する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+運営画面の設定値だけで
+設計書と異なるゲームへ変化させない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>58. 将来機能とセキュリティ</h2>
+
+<div class="rule">
+
+<p>
+利便性のために
+秘密情報をクライアントへ移す設計変更を行わない。
+</p>
+
+</div>
+
+<p>
+特に以下は維持する。
+</p>
+
+<ul>
+<li>sessionTokenを秘密として扱う。</li>
+<li>reconnectTokenを秘密として扱う。</li>
+<li>管理APIを認証する。</li>
+<li>正解をクライアントへ保持しない。</li>
+</ul>
+
+<hr>
+
+<h2>59. 将来機能とコスト</h2>
+
+<div class="box">
+
+<p>
+新機能追加時も、
+不要な常時稼働サーバーや
+高頻度通信を増やさない設計を優先する。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+Battle Timer
+
+毎秒Server Push
+ではなく
+
+Deadline
++
+Client Countdown
+</pre>
+
+</div>
+
+<hr>
+
+<h2>60. 将来機能とWebSocket</h2>
+
+<div class="box">
+
+<p>
+リアルタイム通信が必要な機能のみ
+WebSocketを使用する。
+</p>
+
+</div>
+
+<p>
+静的検索や通常表示まで
+WebSocketへ統合しない。
+</p>
+
+<hr>
+
+<h2>61. 将来機能とD1</h2>
+
+<div class="box">
+
+<p>
+永続保存が不要な一時ゲーム状態を
+無条件にD1へ蓄積しない。
+</p>
+
+</div>
+
+<p>
+用途に応じて、
+D1とDurable Objectsの責務分離を維持する。
+</p>
+
+<hr>
+
+<h2>62. 将来のデータ項目追加</h2>
+
+<div class="box">
+
+<p>
+公式カードデータに新しい項目が追加された場合、
+Source Archiveでは可能な限り失わず保持し、
+Shado Guesserで利用するかは別途判断する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>63. Source Schema変更</h2>
+
+<div class="rule">
+
+<p>
+将来もSource Schemaの変更を
+AIやImporterが自動推測して読み替えない。
+</p>
+
+</div>
+
+<pre>
+Schema変更
+
+↓
+
+Import停止
+
+↓
+
+確認
+
+↓
+
+Importer修正
+
+↓
+
+Version更新
+</pre>
+
+<hr>
+
+<h2>64. 残課題：公式Source Mapping</h2>
+
+<div class="notice">
+
+<p>
+以下は設計未確定ではなく、
+初回Importer実装時に
+公式データから確認する調査項目である。
+</p>
+
+</div>
+
+<ul>
+<li>Source type IDの正式な意味。</li>
+<li>rarity IDの正式名称。</li>
+<li>tribe IDの正式名称。</li>
+<li>「全て」に相当する公式表現。</li>
+<li>card_set_idと正式パック名。</li>
+<li>release_order。</li>
+<li>画像参照方式。</li>
+<li>Keyword構造化データの有無。</li>
+</ul>
+
+<hr>
+
+<h2>65. Mapping調査は仕様変更ではない</h2>
+
+<div class="rule">
+
+<p>
+上記のID対応が未確認でも、
+「未知ならImportを止める」
+という08の設計自体は確定済みとする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>66. 残課題：実運用後の負荷確認</h2>
+
+<div class="box">
+
+<p>
+実際の利用者数が判明した後、
+必要に応じて以下を確認する。
+</p>
+
+</div>
+
+<ul>
+<li>同時Battle数。</li>
+<li>WebSocket接続数。</li>
+<li>D1アクセス量。</li>
+<li>Search Indexサイズ。</li>
+<li>Source Archive容量。</li>
+<li>エラーログ増加量。</li>
+</ul>
+
+<div class="notice">
+
+<p>
+これらは初期設計を変更する前提ではなく、
+実測後の最適化項目とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>67. 残課題：レート制限</h2>
+
+<div class="box">
+
+<p>
+APIへの具体的なRate Limit値は、
+実運用・アクセス量を確認して調整する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+Rate Limitの存在自体は想定するが、
+具体値は初期実装時または運用開始後に調整可能とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>68. 残課題：Matchmaking規模</h2>
+
+<div class="box">
+
+<p>
+ランダムマッチ実装時には、
+実際の同時待機人数を考慮して
+Matchmaking Stateの実装方法を決定する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+ローテーション固定というゲーム仕様は確定し、
+待機キューの内部実装方式のみ将来決定する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>69. ランダムマッチ優先度</h2>
+
+<div class="future-high">
+
+<p>
+将来候補の中では、
+ランダムマッチを比較的優先度の高い追加機能として扱う。
+</p>
+
+</div>
+
+<pre>
+初期版完成
+
+↓
+
+安定運用
+
+↓
+
+ランダムマッチ検討
+</pre>
+
+<hr>
+
+<h2>70. ランダムマッチで初期版に追加しないもの</h2>
+
+<div class="box">
+
+<ul>
+<li>レート。</li>
+<li>ランク。</li>
+<li>ランキング。</li>
+<li>戦績。</li>
+<li>Bot補完。</li>
+<li>カスタム条件Match。</li>
+<li>アンリミテッドMatch。</li>
+<li>全カードMatch。</li>
+<li>観戦者。</li>
+</ul>
+
+</div>
+
+<div class="rule">
+
+<p>
+まず
+「ローテーションで知らない相手と通常Battleができる」
+ことだけを目的とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>71. 初期版完成範囲</h2>
+
+<div class="box">
+
+<p>
+09に記載された将来候補を実装しなくても、
+01～08の仕様を満たせば
+Shado Guesser初期版は完成とみなす。
+</p>
+
+</div>
+
+<pre>
+Solo
+
+Daily
+
+2人出題
+
+Room ID Battle
+
+Card Search
+
+Hints
+
+Results
+
+Cloudflare Server
+
+Admin
+
+Data Import / Update
+</pre>
+
+<hr>
+
+<h2>72. 09で新たに確定した事項</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>確定内容</th>
+</tr>
+
+<tr>
+<td>ランダムマッチ</td>
+<td>将来対応候補・優先度高</td>
+</tr>
+
+<tr>
+<td>回答範囲</td>
+<td>ローテーション固定</td>
+</tr>
+
+<tr>
+<td>アンリミテッドMatch</td>
+<td>対象外</td>
+</tr>
+
+<tr>
+<td>全カードMatch</td>
+<td>対象外</td>
+</tr>
+
+<tr>
+<td>カスタムMatch</td>
+<td>対象外</td>
+</tr>
+
+<tr>
+<td>Data Version</td>
+<td>同Version同士でMatch</td>
+</tr>
+
+<tr>
+<td>ランダムマッチログイン</td>
+<td>不要</td>
+</tr>
+
+<tr>
+<td>ランダムマッチレート</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>ランダムマッチ戦績</td>
+<td>永続保存なし</td>
+</tr>
+
+<tr>
+<td>待機キャンセル</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>待機中切断</td>
+<td>Matchmaking解除</td>
+</tr>
+
+<tr>
+<td>Match成立後</td>
+<td>既存BattleRoomDOへ移行</td>
+</tr>
+
+<tr>
+<td>Bot</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>観戦者</td>
+<td>将来候補</td>
+</tr>
+
+<tr>
+<td>アカウント</td>
+<td>将来候補</td>
+</tr>
+
+<tr>
+<td>ランキング</td>
+<td>将来候補</td>
+</tr>
+
+<tr>
+<td>戦績</td>
+<td>将来候補</td>
+</tr>
+
+<tr>
+<td>Dailyストリーク</td>
+<td>将来候補</td>
+</tr>
+
+<tr>
+<td>複数管理者権限</td>
+<td>将来候補</td>
+</tr>
+
+<tr>
+<td>緊急全停止</td>
+<td>将来候補</td>
+</tr>
+
+<tr>
+<td>Source自動取得</td>
+<td>将来候補</td>
+</tr>
+
+<tr>
+<td>Source自動Current化</td>
+<td>行わない</td>
+</tr>
+
+<tr>
+<td>旧Version自動削除</td>
+<td>将来候補</td>
+</tr>
+
+<tr>
+<td>進化後情報活用</td>
+<td>将来候補</td>
+</tr>
+
+<tr>
+<td>WordPress正式組み込み</td>
+<td>将来対応可能</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>73. 01～09の設計書構成</h2>
+
+<div class="box">
+
+<pre>
+01
+System Overview
+
+02
+Game Rules
+
+03
+Judgement Specification
+
+04
+Data Design
+
+05
+UI Design
+
+06
+Server / Cloudflare Design
+
+07
+Admin Design
+
+08
+Data Update Process
+
+09
+Future / Open Issues
+</pre>
+
+</div>
+
+<hr>
+
+<h2>74. 基本設計書シリーズの完成範囲</h2>
+
+<div class="rule">
+
+<p>
+01～09を
+Shado Guesser初期版の基本設計書シリーズとする。
+</p>
+
+</div>
+
+<p>
+09以降に新しい設計書が必要になった場合は、
+実装工程または追加機能単位で別途作成する。
+</p>
+
+<hr>
+
+<h2>75. 将来の追加設計書例</h2>
+
+<div class="box">
+
+<p>
+必要になった場合のみ、
+以下のような追加設計書を作成できる。
+</p>
+
+</div>
+
+<pre>
+10
+Implementation Guide
+
+11
+Deployment Guide
+
+12
+Random Match Design
+
+13
+WordPress Integration Guide
+
+...
+</pre>
+
+<div class="notice">
+
+<p>
+現時点では作成必須とはしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>76. 最終原則</h2>
+
+<div class="rule">
+
+<p>
+将来機能は、
+<strong>既存のShado Guesserを作り直すのではなく、
+既存基盤の上へ追加できる構造</strong>
+を優先する。
+</p>
+
+</div>
+
+<pre>
+Pages
+
+Workers
+
+D1
+
+Durable Objects
+
+Versioned Data
+
+Server Source of Truth
+
+↓
+
+既存基盤を維持
+
+↓
+
+新機能を追加
+</pre>
+
+<hr>
+
+<h2>77. 最終方針</h2>
+
+<div class="box">
+
+<p>
+初期版では機能を必要以上に増やさず、
+01～08で定義したゲームを
+安定して動作させることを優先する。
+</p>
+
+<p>
+その後、
+利用状況や必要性を確認しながら
+ランダムマッチをはじめとする
+将来機能を段階的に追加する。
+</p>
+
+</div>
+
+<div class="future-high">
+
+<p>
+特にランダムマッチについては、
+<strong>「ローテーション固定・ログイン不要・レートなし・
+成立後は既存Battleへ移行」</strong>
+というシンプルな構成を基本案として保持する。
+</p>
+
+</div>
+
+<hr>
+
+<p class="small">
+Shado Guesser 基本設計書<br>
+09 将来拡張・残課題<br><br>
+©Shado Guesser
+</p>
+
+</body>
+</html>

@@ -1,0 +1,2607 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Shado Guesser 基本設計書 - 05-04 カード詳細UI</title>
+
+<style>
+
+body{
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    color:#222;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+}
+
+h1{
+    border-bottom:4px solid #3f51b5;
+    padding-bottom:10px;
+}
+
+h2{
+    margin-top:45px;
+    border-left:8px solid #3f51b5;
+    padding-left:12px;
+}
+
+h3{
+    margin-top:30px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th,
+td{
+    border:1px solid #cccccc;
+    padding:10px;
+    vertical-align:top;
+}
+
+th{
+    background:#3f51b5;
+    color:white;
+}
+
+.box{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+}
+
+.notice{
+    background:#fff8e1;
+    border-left:6px solid #ffc107;
+    padding:15px;
+    margin-top:20px;
+}
+
+.rule{
+    background:#e8eaf6;
+    border-left:6px solid #3f51b5;
+    padding:15px;
+    margin-top:20px;
+}
+
+.warning{
+    background:#ffebee;
+    border-left:6px solid #d32f2f;
+    padding:15px;
+    margin-top:20px;
+}
+
+.example{
+    background:#e8f5e9;
+    border-left:6px solid #4caf50;
+    padding:15px;
+    margin-top:20px;
+}
+
+pre{
+    background:#222;
+    color:#f5f5f5;
+    padding:20px;
+    border-radius:8px;
+    overflow:auto;
+    line-height:1.6;
+}
+
+code{
+    background:#eeeeee;
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.small{
+    color:#777;
+    font-size:0.9em;
+}
+
+@media(max-width:700px){
+
+    body{
+        padding:18px;
+    }
+
+    table{
+        font-size:0.88em;
+    }
+
+    th,
+    td{
+        padding:7px;
+    }
+
+    pre{
+        padding:12px;
+        font-size:0.82em;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Shado Guesser 基本設計書</h1>
+
+<p>
+<strong>05-04：カード詳細UI</strong>
+</p>
+
+<p>
+本設計書では、
+Shado Guesserの回答履歴カードを展開した際に表示する
+カード詳細情報の構成、
+項目順、
+列構成、
+ラベル表示、
+カードデータとの対応、
+長文・複数値の扱いについて定義する。
+</p>
+
+<p>
+カードデータの正式な内部構造は
+「04 データ設計」、
+カード属性の正式な判定方法は
+「03 判定仕様」に従う。
+</p>
+
+<hr>
+
+<h2>1. 目的</h2>
+
+<div class="box">
+
+<p>
+カード詳細UIは、
+プレイヤーが回答したカードの情報と
+サーバーから返された判定結果を確認し、
+次の回答を考えるための主要な情報表示領域である。
+</p>
+
+<p>
+一度に多数の項目を扱うため、
+横長の巨大テーブルではなく、
+スマートフォンでも確認しやすい
+<strong>カード型・複数段レイアウト</strong>
+を採用する。
+</p>
+
+<p>
+各回答で同じ位置に同じ項目を表示し、
+複数の回答を比較しやすい構造とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>基本方針</strong>
+
+<ul>
+<li>履歴カードを展開した場合のみ詳細を表示する。</li>
+<li>横長の巨大テーブル形式にはしない。</li>
+<li>項目の並び順を固定する。</li>
+<li>項目名は値の上へ小さく表示する。</li>
+<li>長い文字列は自然に折り返す。</li>
+<li>PC・スマートフォンで情報順序を可能な限り統一する。</li>
+<li>画面表示名と内部データ名を分離する。</li>
+<li>正式な判定状態はサーバーから受け取った値を使用する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>2. 詳細UI全体構成</h2>
+
+<div class="box">
+
+<p>
+履歴カードを展開した場合、
+カード画像・カード名が表示される
+履歴ヘッダーの直下へ詳細情報を表示する。
+</p>
+
+</div>
+
+<pre>
+┌────────────────────────────────────────────┐
+│ ▼ [画像] カード名                         │
+├────────────────────────────────────────────┤
+│ カードパック                               │
+│ ＜カードパック名＞                         │
+├──────────────────────┬─────────────────────┤
+│ クラス               │ レアリティ          │
+│ ネメシス             │ レジェンド          │
+├──────────────────────┼─────────────────────┤
+│ 分類                 │ タイプ              │
+│ フォロワー           │ 宴楽・兵士・学園    │
+├──────────────┬──────────────┬──────────────┤
+│ コスト       │ 攻撃力       │ 体力          │
+│ 7 ▲          │ 5 ▼          │ 6             │
+├──────────────┴──────────────┴──────────────┤
+│ キーワード能力                             │
+│ 守護・突進                                 │
+├────────────────────────────────────────────┤
+│ ファンファーレ ～～する。                  │
+│ 進化時 ～～する。                          │
+└────────────────────────────────────────────┘
+</pre>
+
+<div class="rule">
+
+<p>
+表示順は以下で固定する。
+</p>
+
+<ol>
+<li>カードパック。</li>
+<li>クラス / レアリティ。</li>
+<li>分類 / タイプ。</li>
+<li>コスト / 攻撃力 / 体力。</li>
+<li>キーワード能力。</li>
+<li>カード能力テキスト。</li>
+</ol>
+
+</div>
+
+<hr>
+
+<h2>3. 内部データとの対応</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>画面表示</th>
+<th>主な内部データ</th>
+<th>備考</th>
+</tr>
+
+<tr>
+<td>カードパック</td>
+<td><code>card_set_id</code> / <code>is_token</code></td>
+<td>04のpack_name導出ルールで表示名を決定</td>
+</tr>
+
+<tr>
+<td>クラス</td>
+<td><code>class</code></td>
+<td>classesから表示名を解決</td>
+</tr>
+
+<tr>
+<td>レアリティ</td>
+<td><code>rarity</code></td>
+<td>raritiesから表示名を解決</td>
+</tr>
+
+<tr>
+<td>分類</td>
+<td><code>type</code></td>
+<td>Normalized Dataの分類</td>
+</tr>
+
+<tr>
+<td>タイプ</td>
+<td><code>card_tribes</code> / <code>tribe_mode</code></td>
+<td>tribesから名称を解決</td>
+</tr>
+
+<tr>
+<td>コスト</td>
+<td><code>cost</code></td>
+<td>数値</td>
+</tr>
+
+<tr>
+<td>攻撃力</td>
+<td><code>atk</code></td>
+<td>進化前ステータス</td>
+</tr>
+
+<tr>
+<td>体力</td>
+<td><code>life</code></td>
+<td>進化前ステータス</td>
+</tr>
+
+<tr>
+<td>キーワード能力</td>
+<td><code>card_keywords</code></td>
+<td>keywordsから名称を解決</td>
+</tr>
+
+<tr>
+<td>能力テキスト</td>
+<td><code>skill_text</code></td>
+<td>全文表示・判定対象外</td>
+</tr>
+
+<tr>
+<td>カード画像</td>
+<td><code>image_ref</code></td>
+<td>履歴ヘッダーで使用</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>4. 使用しない旧内部名称</h2>
+
+<div class="warning">
+
+<pre>
+attack
+→ atk
+
+
+health
+→ life
+
+
+classification_id
+→ type
+
+
+class_id
+→ class
+
+
+pack_id
+→ card_set_id
+
+
+rarity_id
+→ rarity
+</pre>
+
+</div>
+
+<hr>
+
+<h2>5. 項目ラベル</h2>
+
+<div class="box">
+
+<p>
+各情報には日本語の項目名を表示する。
+</p>
+
+<p>
+基本構造は
+<strong>ラベルを上、値を下</strong>
+とする。
+</p>
+
+</div>
+
+<pre>
+クラス
+エルフ
+
+
+レアリティ
+レジェンド
+
+
+コスト
+7 ▲
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>ラベルは値より小さい文字サイズ。</li>
+<li>ラベルは灰色系を基本。</li>
+<li>値を視覚的な主情報とする。</li>
+<li>画面上では日本語名称を使用する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>6. 表示ラベルと内部データ</h2>
+
+<table>
+
+<tr>
+<th>内部データ</th>
+<th>表示ラベル</th>
+</tr>
+
+<tr>
+<td><code>card_set_id / is_token</code></td>
+<td>カードパック</td>
+</tr>
+
+<tr>
+<td><code>class</code></td>
+<td>クラス</td>
+</tr>
+
+<tr>
+<td><code>rarity</code></td>
+<td>レアリティ</td>
+</tr>
+
+<tr>
+<td><code>type</code></td>
+<td>分類</td>
+</tr>
+
+<tr>
+<td><code>card_tribes / tribe_mode</code></td>
+<td>タイプ</td>
+</tr>
+
+<tr>
+<td><code>cost</code></td>
+<td>コスト</td>
+</tr>
+
+<tr>
+<td><code>atk</code></td>
+<td>攻撃力</td>
+</tr>
+
+<tr>
+<td><code>life</code></td>
+<td>体力</td>
+</tr>
+
+<tr>
+<td><code>card_keywords</code></td>
+<td>キーワード能力</td>
+</tr>
+
+</table>
+
+<div class="notice">
+
+<p>
+<code>skill_text</code>
+には専用ラベルを表示しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>7. カードパック</h2>
+
+<div class="box">
+
+<p>
+カードパックは詳細UIの最上段へ
+1列で表示する。
+</p>
+
+</div>
+
+<pre>
+┌────────────────────────────────────────────┐
+│ カードパック                               │
+│ ＜カードパック名＞                         │
+└────────────────────────────────────────────┘
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>横幅全体を使用する。</li>
+<li>正式名称を全文表示する。</li>
+<li>長い場合は自然に折り返す。</li>
+<li>原則「…」で省略しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>8. カードパック表示名</h2>
+
+<div class="box">
+
+<p>
+カードパック欄の表示名は、
+04で定義したDerived Ruleに従う。
+</p>
+
+</div>
+
+<pre>
+if (is_token === true) {
+
+    pack_name = "トークン";
+
+}
+else if (card_set_id === 10000) {
+
+    pack_name = "ベーシック";
+
+}
+else {
+
+    pack_name = card_sets.name;
+
+}
+</pre>
+
+<table>
+
+<tr>
+<th>カード状態</th>
+<th>画面表示</th>
+</tr>
+
+<tr>
+<td><code>is_token = true</code></td>
+<td>トークン</td>
+</tr>
+
+<tr>
+<td><code>is_token = false</code><br><code>card_set_id = 10000</code></td>
+<td>ベーシック</td>
+</tr>
+
+<tr>
+<td>その他の通常カード</td>
+<td>card_sets.name</td>
+</tr>
+
+</table>
+
+<div class="warning">
+
+<p>
+Tokenについて、
+card_set_idから通常カードパックへの所属を推測して表示しない。
+</p>
+
+<p>
+card_set_idの数値から
+「第○弾」等を推測しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>9. カードパック判定との関係</h2>
+
+<div class="box">
+
+<p>
+画面表示用のpack_nameと、
+03で定義する正式判定は役割を分離する。
+</p>
+
+</div>
+
+<pre>
+表示：
+
+トークン
+ベーシック
+通常パック名
+
+
+判定：
+
+TOKEN
+BASIC
+CARD_SET:{card_set_id}
+</pre>
+
+<div class="notice">
+
+<p>
+判定Identityそのものを
+画面へ表示する必要はない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>10. クラス・レアリティ</h2>
+
+<pre>
+┌──────────────────────┬─────────────────────┐
+│ クラス               │ レアリティ          │
+│ ネメシス             │ レジェンド          │
+└──────────────────────┴─────────────────────┘
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>左：クラス。</li>
+<li>右：レアリティ。</li>
+<li>2列は原則均等幅。</li>
+<li>classはclassesから名称を取得。</li>
+<li>rarityはraritiesから名称を取得。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>11. 分類・タイプ</h2>
+
+<pre>
+┌──────────────────────┬─────────────────────┐
+│ 分類                 │ タイプ              │
+│ フォロワー           │ 宴楽・兵士・学園    │
+└──────────────────────┴─────────────────────┘
+</pre>
+
+<div class="rule">
+
+<p>
+Shado Guesserでは
+<strong>分類とタイプを明確に別データとして扱う。</strong>
+</p>
+
+<pre>
+分類
+→ cards.type
+
+
+タイプ
+→ card_tribes / tribes / tribe_mode
+</pre>
+
+</div>
+
+<hr>
+
+<h2>12. 分類 type</h2>
+
+<div class="box">
+
+<p>
+画面上の「分類」には、
+<strong>Importerによって正規化済みの
+Normalized Dataの <code>cards.type</code></strong>
+を使用する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>Normalized type</th>
+<th>表示</th>
+</tr>
+
+<tr>
+<td>1</td>
+<td>フォロワー</td>
+</tr>
+
+<tr>
+<td>2</td>
+<td>スペル</td>
+</tr>
+
+<tr>
+<td>3</td>
+<td>アミュレット</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+Shado Guesser上の正常なtypeは
+1 / 2 / 3とする。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+公式Source Dataのraw typeを
+画面側で直接解釈してはならない。
+</p>
+
+<pre>
+Official Source raw type
+
+↓
+
+08 Importer
+
+↓
+
+明示的Mapping
+
+↓
+
+Normalized cards.type
+
+↓
+
+カード詳細UI
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+Source側でtype=4等が存在しても、
+画面に「分類4」等として表示しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>13. Tokenと分類</h2>
+
+<div class="rule">
+
+<p>
+Tokenかどうかは
+<code>type</code>
+では判定しない。
+</p>
+
+<pre>
+Token
+
+→ is_token
+
+
+分類
+
+→ type
+</pre>
+
+</div>
+
+<hr>
+
+<h2>14. タイプ</h2>
+
+<div class="box">
+
+<p>
+画面上の「タイプ」は、
+Normalized Dataの
+<code>card_tribes</code>
+と
+<code>tribes</code>
+から表示する。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+宴楽
+
+兵士・学園
+
+宴楽・兵士・学園
+</pre>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>複数タイプは同じ欄に表示。</li>
+<li>タイプ間は「・」区切り。</li>
+<li>タイプごとに別行へ分割しない。</li>
+<li>長い場合は自然に折り返す。</li>
+<li>表示名称はtribesマスターから取得する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>15. タイプ表示幅</h2>
+
+<div class="box">
+
+<p>
+少なくとも
+2文字程度のタイプを3件程度表示するケースを想定する。
+</p>
+
+</div>
+
+<pre>
+宴楽・兵士・学園
+</pre>
+
+<div class="rule">
+
+<p>
+スマートフォンでも可能な限り
+「分類 / タイプ」の2列構成を維持する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>16. タイプなし</h2>
+
+<div class="box">
+
+<p>
+正常なデータとしてタイプを持たない場合は
+空欄にせず
+<strong>「－」</strong>
+を表示する。
+</p>
+
+</div>
+
+<pre>
+tribe_mode = "normal"
+
+card_tribes = 0件
+
+
+↓
+
+タイプ
+－
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>NULL等の内部表現をそのまま表示しない。</li>
+<li>正常なタイプなしは「－」。</li>
+<li>データ取得失敗を「－」で隠さない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>17. 特殊タイプ「全て」</h2>
+
+<div class="box">
+
+<p>
+<code>tribe_mode = "all"</code>
+の場合は、
+タイプ欄へ
+<strong>「全て」</strong>
+と表示する。
+</p>
+
+</div>
+
+<pre>
+tribe_mode = "all"
+
+↓
+
+タイプ
+全て
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>全tribe名を列挙しない。</li>
+<li>「全て」を通常tribe_idとして扱わない。</li>
+<li>判定は03の特殊ルールへ従う。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>18. コスト・攻撃力・体力</h2>
+
+<div class="box">
+
+<p>
+数値情報は1行3列とする。
+</p>
+
+</div>
+
+<pre>
+┌──────────────┬──────────────┬──────────────┐
+│ コスト       │ 攻撃力       │ 体力          │
+│ 7 ▲          │ 5 ▼          │ 6             │
+└──────────────┴──────────────┴──────────────┘
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>左：コスト。</li>
+<li>中央：攻撃力。</li>
+<li>右：体力。</li>
+<li>回答カードごとに列位置を変更しない。</li>
+<li>スマートフォンでも3列を基本。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>19. 数値データ</h2>
+
+<table>
+
+<tr>
+<th>画面</th>
+<th>Normalized Data</th>
+</tr>
+
+<tr>
+<td>コスト</td>
+<td><code>cost</code></td>
+</tr>
+
+<tr>
+<td>攻撃力</td>
+<td><code>atk</code></td>
+</tr>
+
+<tr>
+<td>体力</td>
+<td><code>life</code></td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+atk / lifeは
+<strong>進化前ステータス</strong>
+を使用する。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+進化後ステータスは
+初期版のGuess判定・詳細判定値へ使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>20. 数値表示</h2>
+
+<pre>
+コスト
+7 ▲
+
+
+攻撃力
+5 ▼
+
+
+体力
+6
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>画面ラベルは「コスト」「攻撃力」「体力」。</li>
+<li>Cost / Atk / Life等を画面ラベルにしない。</li>
+<li>内部ではcost / atk / lifeを使用。</li>
+<li>▲・▼は値の近くへ表示。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>21. 非Followerのatk / life</h2>
+
+<div class="box">
+
+<p>
+スペル・アミュレット等、
+ゲーム上atk / lifeを持たないカードでは
+通常数値として表示しない。
+</p>
+
+</div>
+
+<pre>
+Normalized Data
+
+type = 2
+
+atk  = NULL
+life = NULL
+
+
+↓
+
+画面
+
+コスト
+3
+
+攻撃力
+－
+
+体力
+－
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>非Followerのatk / lifeは「－」。</li>
+<li>Source側の0を通常値0として表示しない。</li>
+<li>「－」に▲▼を付けない。</li>
+<li>列そのものは残す。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>22. atk / life比較条件</h2>
+
+<div class="rule">
+
+<strong>
+回答カードと正解カードの両方がFollowerの場合のみ比較する。
+</strong>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>atk / life</th>
+</tr>
+
+<tr>
+<td>Follower</td>
+<td>Follower</td>
+<td>比較</td>
+</tr>
+
+<tr>
+<td>Follower</td>
+<td>非Follower</td>
+<td>－</td>
+</tr>
+
+<tr>
+<td>非Follower</td>
+<td>Follower</td>
+<td>－</td>
+</tr>
+
+<tr>
+<td>非Follower</td>
+<td>非Follower</td>
+<td>－</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>23. Followerのatk / life欠損</h2>
+
+<div class="warning">
+
+<p>
+Followerであるにもかかわらず
+atkまたはlifeがNULLの場合は、
+正常な「－」として表示しない。
+</p>
+
+<p>
+カードデータ異常として
+03で定義するerror状態へ移行する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>24. キーワード能力</h2>
+
+<div class="box">
+
+<p>
+キーワード能力は
+横幅全体を使用する1列表示とする。
+</p>
+
+</div>
+
+<pre>
+┌────────────────────────────────────────────┐
+│ キーワード能力                             │
+│ 守護・突進                                 │
+└────────────────────────────────────────────┘
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>複数Keywordを表示可能。</li>
+<li>長い場合は自然に折り返す。</li>
+<li>横スクロールを発生させない。</li>
+<li>Keyword欄全体で1つの判定状態を持つ。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>25. Keywordのデータ元</h2>
+
+<div class="box">
+
+<p>
+Keyword表示には
+04で構造化された
+<code>keywords</code> /
+<code>card_keywords</code>
+を使用する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+画面を表示するたびに
+skill_textを解析してKeywordを作成しない。
+</p>
+
+</div>
+
+<pre>
+Source
+
+↓
+
+08 Importer
+
+↓
+
+Keyword Normalization
+
+↓
+
+keywords / card_keywords
+
+↓
+
+カード詳細UI
+</pre>
+
+<hr>
+
+<h2>26. Keywordなし</h2>
+
+<div class="rule">
+
+<pre>
+card_keywords = 0件
+
+↓
+
+キーワード能力
+－
+</pre>
+
+</div>
+
+<p>
+正常なKeywordなしと
+データ取得エラーを区別する。
+</p>
+
+<hr>
+
+<h2>27. 能力テキスト</h2>
+
+<div class="box">
+
+<p>
+Keyword欄の下へ
+<code>skill_text</code>
+全文を表示する。
+</p>
+
+</div>
+
+<pre>
+┌────────────────────────────────────────────┐
+│ ファンファーレ ～～する。                  │
+│                                            │
+│ 進化時 ～～する。                          │
+└────────────────────────────────────────────┘
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>skill_text全文を表示する。</li>
+<li>元データの改行を可能な限り維持する。</li>
+<li>表示用情報として扱う。</li>
+<li>能力文章そのものは判定しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>28. skill_textの保存単位</h2>
+
+<div class="rule">
+
+<p>
+能力テキストは
+<code>skill_text</code>
+という1つのTEXTとして扱う。
+</p>
+
+<ul>
+<li>ファンファーレごとの専用列を作らない。</li>
+<li>進化時能力ごとの専用列を作らない。</li>
+<li>表示時も1つの能力本文として扱う。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>29. 能力テキストの見出し</h2>
+
+<div class="warning">
+
+<p>
+以下の専用見出しは表示しない。
+</p>
+
+<pre>
+効果
+
+Effect
+
+能力
+</pre>
+
+</div>
+
+<div class="rule">
+
+<strong>表示：</strong>
+
+<pre>
+ファンファーレ ～～する。
+進化時 ～～する。
+</pre>
+
+</div>
+
+<hr>
+
+<h2>30. 能力テキストの全文表示</h2>
+
+<div class="rule">
+
+<ul>
+<li>文字数による切り捨てを行わない。</li>
+<li>「続きを読む」を基本的に設置しない。</li>
+<li>「…」で能力文を省略しない。</li>
+<li>自然に複数行へ折り返す。</li>
+<li>テキスト量に応じてカード高さを伸ばす。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>31. 能力テキストは判定しない</h2>
+
+<div class="rule">
+
+<ul>
+<li>文章一致判定なし。</li>
+<li>緑・黄色・灰色を付けない。</li>
+<li>▲・▼を付けない。</li>
+<li>ゲーム正解判定へ使用しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>32. 判定対象一覧</h2>
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>内部データ</th>
+<th>判定</th>
+</tr>
+
+<tr>
+<td>カードパック</td>
+<td>card_set_id / is_token</td>
+<td>対象</td>
+</tr>
+
+<tr>
+<td>クラス</td>
+<td>class</td>
+<td>対象</td>
+</tr>
+
+<tr>
+<td>レアリティ</td>
+<td>rarity</td>
+<td>対象</td>
+</tr>
+
+<tr>
+<td>分類</td>
+<td>type</td>
+<td>対象</td>
+</tr>
+
+<tr>
+<td>タイプ</td>
+<td>card_tribes / tribe_mode</td>
+<td>対象</td>
+</tr>
+
+<tr>
+<td>コスト</td>
+<td>cost</td>
+<td>対象</td>
+</tr>
+
+<tr>
+<td>攻撃力</td>
+<td>atk</td>
+<td>双方Followerのみ</td>
+</tr>
+
+<tr>
+<td>体力</td>
+<td>life</td>
+<td>双方Followerのみ</td>
+</tr>
+
+<tr>
+<td>キーワード能力</td>
+<td>card_keywords</td>
+<td>対象</td>
+</tr>
+
+<tr>
+<td>能力テキスト</td>
+<td>skill_text</td>
+<td>対象外</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>33. 表示値と判定状態</h2>
+
+<div class="box">
+
+<p>
+各セルは、
+表示値と判定状態を分離して扱う。
+</p>
+
+</div>
+
+<pre>
+カードパック
+
+displayValue:
+＜カードパック名＞
+
+judge:
+miss
+
+
+タイプ
+
+displayValue:
+宴楽・兵士
+
+judge:
+partial
+
+
+コスト
+
+displayValue:
+7
+
+judge:
+higher
+</pre>
+
+<div class="rule">
+
+<p>
+フロントエンドが表示値から
+正式判定を再計算しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>34. 判定状態</h2>
+
+<pre>
+match
+
+partial
+
+miss
+
+higher
+
+lower
+
+notApplicable
+</pre>
+
+<div class="rule">
+
+<p>
+05-04では意味状態のみを扱い、
+具体的な色・矢印表現は05-05を正とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>35. 列構成</h2>
+
+<table>
+
+<tr>
+<th>行</th>
+<th>列</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td>1</td>
+<td>1</td>
+<td>カードパック</td>
+</tr>
+
+<tr>
+<td>2</td>
+<td>2</td>
+<td>クラス / レアリティ</td>
+</tr>
+
+<tr>
+<td>3</td>
+<td>2</td>
+<td>分類 / タイプ</td>
+</tr>
+
+<tr>
+<td>4</td>
+<td>3</td>
+<td>コスト / 攻撃力 / 体力</td>
+</tr>
+
+<tr>
+<td>5</td>
+<td>1</td>
+<td>キーワード能力</td>
+</tr>
+
+<tr>
+<td>6</td>
+<td>1</td>
+<td>能力テキスト</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>36. レイアウトの安定性</h2>
+
+<div class="rule">
+
+<ul>
+<li>回答カードによって項目位置を変更しない。</li>
+<li>Follower / Spell / Amuletでも同じ基本構造。</li>
+<li>atk / life対象外でも列を消さない。</li>
+<li>対象外は「－」。</li>
+<li>回答同士を縦方向に比較しやすくする。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>37. 正常な「なし」</h2>
+
+<div class="box">
+
+<p>
+カード仕様上、
+正常に値を持たない場合は
+空白ではなく「－」を基本とする。
+</p>
+
+</div>
+
+<pre>
+タイプ
+－
+
+
+キーワード能力
+－
+
+
+攻撃力
+－
+
+
+体力
+－
+</pre>
+
+<div class="rule">
+
+<p>
+「－」は
+<strong>データエラーの代用表示ではない。</strong>
+</p>
+
+</div>
+
+<hr>
+
+<h2>38. 正常な「なし」とデータ異常</h2>
+
+<table>
+
+<tr>
+<th>状態</th>
+<th>処理</th>
+</tr>
+
+<tr>
+<td>タイプなし</td>
+<td>正常。「－」</td>
+</tr>
+
+<tr>
+<td>Keywordなし</td>
+<td>正常。「－」</td>
+</tr>
+
+<tr>
+<td>非Followerのatk / life</td>
+<td>正常。「－」</td>
+</tr>
+
+<tr>
+<td>Followerのatk欠損</td>
+<td>データ異常</td>
+</tr>
+
+<tr>
+<td>Followerのlife欠損</td>
+<td>データ異常</td>
+</tr>
+
+<tr>
+<td>未知class</td>
+<td>データ異常</td>
+</tr>
+
+<tr>
+<td>未知Normalized type</td>
+<td>データ異常</td>
+</tr>
+
+<tr>
+<td>必要なcard_set Mappingなし</td>
+<td>データ異常</td>
+</tr>
+
+<tr>
+<td>未知tribe</td>
+<td>データ異常</td>
+</tr>
+
+<tr>
+<td>未知Keyword</td>
+<td>データ異常</td>
+</tr>
+
+</table>
+
+<div class="warning">
+
+<p>
+データ異常を
+「－」「不明」「その他」等へ置き換えて
+ゲームを続行しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>39. 長い文字列</h2>
+
+<div class="rule">
+
+<ul>
+<li>カードパック名は折り返す。</li>
+<li>タイプは折り返す。</li>
+<li>Keywordは折り返す。</li>
+<li>skill_textは折り返す。</li>
+<li>横スクロールを基本的に発生させない。</li>
+<li>必要に応じてカード高さを伸ばす。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>40. カード画像・カード名</h2>
+
+<div class="box">
+
+<p>
+カード画像とカード名は
+05-03で定義する履歴カードHeaderに常時表示する。
+</p>
+
+<p>
+展開後の詳細領域では
+同じ画像・カード名を重複表示しない。
+</p>
+
+</div>
+
+<pre>
+▼ [画像] カード名
+
+────────────────────────
+
+カードパック
+...
+
+クラス      レアリティ
+...
+
+分類        タイプ
+...
+
+コスト      攻撃力      体力
+...
+
+キーワード能力
+...
+
+能力テキスト
+...
+</pre>
+
+<hr>
+
+<h2>41. カード画像の参照</h2>
+
+<div class="box">
+
+<p>
+履歴Headerのカード画像は
+<code>image_ref</code>
+を使用して取得する。
+</p>
+
+</div>
+
+<pre>
+SG_CONFIG.imageBaseUrl
+
++
+
+image_ref
+
+↓
+
+Image URL
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>画像BinaryをD1へ保存しない。</li>
+<li>カード画像ごとにWorkerをProxyとして経由しない。</li>
+<li>Browserから画像配信元へ直接取得する構成を基本とする。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>42. image_ref異常</h2>
+
+<div class="warning">
+
+<p>
+ゲーム利用可能カードで
+必要なimage_refが存在しない場合、
+適当な画像URLを推測しない。
+</p>
+
+<p>
+データ異常として扱う。
+</p>
+
+</div>
+
+<hr>
+
+<h2>43. Data Version</h2>
+
+<div class="box">
+
+<p>
+カード詳細に使用するカード情報は、
+ゲーム開始時に固定された
+<code>data_version_id</code>
+に属するNormalized Dataを使用する。
+</p>
+
+</div>
+
+<pre>
+Game Start
+
+data_version_id = A
+version_code = A
+
+
+↓
+
+Current VersionがBへ変更
+
+
+↓
+
+進行中Game
+
+data_version_id = Aを継続
+</pre>
+
+<div class="rule">
+
+<p>
+カード名・パック名・class・rarity・type・tribes・
+cost・atk・life・keywords・skill_text・image_refを
+ゲーム途中から新Versionへ切り替えない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>44. data_version_idとversion_code</h2>
+
+<div class="rule">
+
+<pre>
+data_version_id
+
+→ Server / D1内部のVersion識別子
+
+
+version_code
+
+→ 人間向けVersion表記
+→ 例：2026-07-28-01
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+<code>dataVersion</code>
+という曖昧な名称は原則使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>45. Current変更時</h2>
+
+<div class="box">
+
+<p>
+通常の開始済みゲームでは、
+Current変更によってカード詳細情報を差し替えない。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+Dailyについては、
+Current変更により当日のDaily自体が停止する
+07の専用仕様が適用される。
+</p>
+
+<p>
+これは進行中Dailyのカード詳細だけを
+新Versionへ切り替えるという意味ではない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>46. 正解カードの詳細表示</h2>
+
+<div class="warning">
+
+<p>
+ゲーム進行中に
+正解カードのカード詳細をBrowserへ送信・表示しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+正解カードの情報は、
+通常のゲーム終了後に
+05-07のResult Screenで表示可能となる。
+</p>
+
+</div>
+
+<p>
+Daily停止等、
+正解を公開しない終了状態では表示しない。
+</p>
+
+<hr>
+
+<h2>47. 回答カードの情報</h2>
+
+<div class="box">
+
+<p>
+回答履歴へ追加されたカードについては、
+正常に成立したGuessに対する
+サーバー確定済み情報を表示する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>Clientだけで判定状態を生成しない。</li>
+<li>Serverからの正式Stateを使用する。</li>
+<li>Reload / Reconnect後もServer Snapshotから復元する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>48. stateVersionとの関係</h2>
+
+<div class="box">
+
+<p>
+リアルタイムゲーム等で
+Server Stateに
+<code>stateVersion</code>
+が存在する場合、
+古いSnapshotでカード詳細・履歴を巻き戻さない。
+</p>
+
+</div>
+
+<pre>
+Current
+
+stateVersion = 20
+
+
+↓
+
+遅延Response
+
+stateVersion = 19
+
+
+↓
+
+反映しない
+</pre>
+
+<hr>
+
+<h2>49. HTML構造例</h2>
+
+<div class="box">
+
+<pre>
+&lt;div class="sg-history-detail"&gt;
+
+    &lt;div class="sg-detail-row sg-detail-row--single"&gt;
+
+        &lt;div class="sg-detail-field"&gt;
+
+            &lt;span class="sg-detail-label"&gt;
+                カードパック
+            &lt;/span&gt;
+
+            &lt;span class="sg-detail-value"&gt;
+                ＜カードパック名＞
+            &lt;/span&gt;
+
+        &lt;/div&gt;
+
+    &lt;/div&gt;
+
+
+    &lt;div class="sg-detail-row sg-detail-row--two"&gt;
+
+        &lt;div class="sg-detail-field"&gt;
+
+            &lt;span class="sg-detail-label"&gt;
+                クラス
+            &lt;/span&gt;
+
+            &lt;span class="sg-detail-value"&gt;
+                ネメシス
+            &lt;/span&gt;
+
+        &lt;/div&gt;
+
+
+        &lt;div class="sg-detail-field"&gt;
+
+            &lt;span class="sg-detail-label"&gt;
+                レアリティ
+            &lt;/span&gt;
+
+            &lt;span class="sg-detail-value"&gt;
+                レジェンド
+            &lt;/span&gt;
+
+        &lt;/div&gt;
+
+    &lt;/div&gt;
+
+
+    &lt;div class="sg-detail-row sg-detail-row--two"&gt;
+
+        &lt;div class="sg-detail-field"&gt;
+
+            &lt;span class="sg-detail-label"&gt;
+                分類
+            &lt;/span&gt;
+
+            &lt;span class="sg-detail-value"&gt;
+                フォロワー
+            &lt;/span&gt;
+
+        &lt;/div&gt;
+
+
+        &lt;div class="sg-detail-field"&gt;
+
+            &lt;span class="sg-detail-label"&gt;
+                タイプ
+            &lt;/span&gt;
+
+            &lt;span class="sg-detail-value"&gt;
+                宴楽・兵士
+            &lt;/span&gt;
+
+        &lt;/div&gt;
+
+    &lt;/div&gt;
+
+
+    &lt;div class="sg-detail-row sg-detail-row--three"&gt;
+
+        &lt;div class="sg-detail-field"&gt;
+
+            &lt;span class="sg-detail-label"&gt;
+                コスト
+            &lt;/span&gt;
+
+            &lt;span class="sg-detail-value"&gt;
+                7 ▲
+            &lt;/span&gt;
+
+        &lt;/div&gt;
+
+
+        &lt;div class="sg-detail-field"&gt;
+
+            &lt;span class="sg-detail-label"&gt;
+                攻撃力
+            &lt;/span&gt;
+
+            &lt;span class="sg-detail-value"&gt;
+                5 ▼
+            &lt;/span&gt;
+
+        &lt;/div&gt;
+
+
+        &lt;div class="sg-detail-field"&gt;
+
+            &lt;span class="sg-detail-label"&gt;
+                体力
+            &lt;/span&gt;
+
+            &lt;span class="sg-detail-value"&gt;
+                6
+            &lt;/span&gt;
+
+        &lt;/div&gt;
+
+    &lt;/div&gt;
+
+
+    &lt;div class="sg-detail-row sg-detail-row--single"&gt;
+
+        &lt;div class="sg-detail-field"&gt;
+
+            &lt;span class="sg-detail-label"&gt;
+                キーワード能力
+            &lt;/span&gt;
+
+            &lt;span class="sg-detail-value"&gt;
+                守護・突進
+            &lt;/span&gt;
+
+        &lt;/div&gt;
+
+    &lt;/div&gt;
+
+
+    &lt;div class="sg-card-effect"&gt;
+        ファンファーレ ～～する。
+        進化時 ～～する。
+    &lt;/div&gt;
+
+&lt;/div&gt;
+</pre>
+
+</div>
+
+<div class="notice">
+
+<p>
+上記は構造例であり、
+HTMLタグそのものを固定するものではない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>50. CSSクラス</h2>
+
+<table>
+
+<tr>
+<th>Class</th>
+<th>用途</th>
+</tr>
+
+<tr>
+<td><code>sg-history-detail</code></td>
+<td>カード詳細全体</td>
+</tr>
+
+<tr>
+<td><code>sg-detail-row</code></td>
+<td>詳細1行</td>
+</tr>
+
+<tr>
+<td><code>sg-detail-row--single</code></td>
+<td>1列</td>
+</tr>
+
+<tr>
+<td><code>sg-detail-row--two</code></td>
+<td>2列</td>
+</tr>
+
+<tr>
+<td><code>sg-detail-row--three</code></td>
+<td>3列</td>
+</tr>
+
+<tr>
+<td><code>sg-detail-field</code></td>
+<td>1項目</td>
+</tr>
+
+<tr>
+<td><code>sg-detail-label</code></td>
+<td>項目名</td>
+</tr>
+
+<tr>
+<td><code>sg-detail-value</code></td>
+<td>表示値</td>
+</tr>
+
+<tr>
+<td><code>sg-card-effect</code></td>
+<td>skill_text</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>51. Layout Classと判定Class</h2>
+
+<div class="rule">
+
+<p>
+レイアウト用Classと
+判定状態Classは分離する。
+</p>
+
+</div>
+
+<pre>
+sg-detail-field
++
+sg-judge-match
+
+
+sg-detail-field
++
+sg-judge-partial
+
+
+sg-detail-field
++
+sg-judge-miss
+</pre>
+
+<p>
+最終的な判定Class・色は05-05で定義する。
+</p>
+
+<hr>
+
+<h2>52. ホストサイトとの独立性</h2>
+
+<div class="rule">
+
+<ul>
+<li>カード詳細UIは <code>#sg-app</code> 内へ配置。</li>
+<li>専用Classは <code>sg-</code> prefix。</li>
+<li>WordPress固有HTMLへ依存しない。</li>
+<li>WordPress固有CSSへ依存しない。</li>
+<li>独立Webアプリでも同じUIを使用可能。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>53. Smartphone</h2>
+
+<div class="rule">
+
+<ul>
+<li>カードパック：1列。</li>
+<li>クラス / レアリティ：2列。</li>
+<li>分類 / タイプ：2列。</li>
+<li>コスト / 攻撃力 / 体力：3列。</li>
+<li>Keyword：1列。</li>
+<li>skill_text：1列。</li>
+</ul>
+
+</div>
+
+<p>
+具体的なBreakpoint・文字サイズ・余白は
+05-06で定義する。
+</p>
+
+<hr>
+
+<h2>54. カード詳細UIで行わないこと</h2>
+
+<div class="warning">
+
+<ul>
+<li>詳細部分でカード画像を再表示しない。</li>
+<li>詳細部分でカード名を再表示しない。</li>
+<li>skill_textを判定しない。</li>
+<li>長文を強制省略しない。</li>
+<li>タイプを1件ずつ縦に分割しない。</li>
+<li>Keyword欄へ横Scrollを作らない。</li>
+<li>非Followerのatk/lifeを0として表示しない。</li>
+<li>進化後atk/lifeを初期版Guess判定に使用しない。</li>
+<li>回答カードごとに項目順を変更しない。</li>
+<li>データ異常を「－」で隠さない。</li>
+<li>Tokenをtype=4等として分類欄へ表示しない。</li>
+<li>Source raw typeをClient側で直接Mappingしない。</li>
+<li>card_set_idからPack名を推測しない。</li>
+<li>Clientだけで正式判定を再計算しない。</li>
+<li>ゲーム途中でCurrent Versionのデータへ切り替えない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>55. 確定事項</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>確定仕様</th>
+</tr>
+
+<tr>
+<td>カードパック</td>
+<td>1列</td>
+</tr>
+
+<tr>
+<td>Token Pack表示</td>
+<td>トークン</td>
+</tr>
+
+<tr>
+<td>Basic Pack表示</td>
+<td>ベーシック</td>
+</tr>
+
+<tr>
+<td>通常Pack表示</td>
+<td>card_sets.name</td>
+</tr>
+
+<tr>
+<td>クラス / レアリティ</td>
+<td>2列</td>
+</tr>
+
+<tr>
+<td>分類 / タイプ</td>
+<td>2列</td>
+</tr>
+
+<tr>
+<td>分類</td>
+<td>Normalized cards.type</td>
+</tr>
+
+<tr>
+<td>正常type</td>
+<td>1 / 2 / 3</td>
+</tr>
+
+<tr>
+<td>Source raw type</td>
+<td>UIでは直接使用しない</td>
+</tr>
+
+<tr>
+<td>Token判定</td>
+<td>is_token</td>
+</tr>
+
+<tr>
+<td>タイプ</td>
+<td>card_tribes / tribes / tribe_mode</td>
+</tr>
+
+<tr>
+<td>タイプ区切り</td>
+<td>・</td>
+</tr>
+
+<tr>
+<td>タイプなし</td>
+<td>－</td>
+</tr>
+
+<tr>
+<td>特殊タイプ</td>
+<td>tribe_mode=all → 全て</td>
+</tr>
+
+<tr>
+<td>数値欄</td>
+<td>コスト / 攻撃力 / 体力の3列</td>
+</tr>
+
+<tr>
+<td>攻撃力</td>
+<td>atk</td>
+</tr>
+
+<tr>
+<td>体力</td>
+<td>life</td>
+</tr>
+
+<tr>
+<td>atk / life</td>
+<td>進化前</td>
+</tr>
+
+<tr>
+<td>非Follower atk / life</td>
+<td>NULL → －表示</td>
+</tr>
+
+<tr>
+<td>atk / life比較</td>
+<td>双方Followerのみ</td>
+</tr>
+
+<tr>
+<td>Keyword</td>
+<td>1列</td>
+</tr>
+
+<tr>
+<td>Keywordデータ</td>
+<td>keywords / card_keywords</td>
+</tr>
+
+<tr>
+<td>Keywordなし</td>
+<td>－</td>
+</tr>
+
+<tr>
+<td>能力テキスト</td>
+<td>skill_text全文</td>
+</tr>
+
+<tr>
+<td>能力テキスト見出し</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>能力テキスト判定</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>正式判定</td>
+<td>Server</td>
+</tr>
+
+<tr>
+<td>表示値 / 判定状態</td>
+<td>分離</td>
+</tr>
+
+<tr>
+<td>内部Version</td>
+<td>data_version_id</td>
+</tr>
+
+<tr>
+<td>人間向けVersion</td>
+<td>version_code</td>
+</tr>
+
+<tr>
+<td>進行中Game</td>
+<td>開始時data_version_idを維持</td>
+</tr>
+
+<tr>
+<td>画像参照</td>
+<td>image_ref</td>
+</tr>
+
+<tr>
+<td>画像URL</td>
+<td>SG_CONFIG.imageBaseUrl + image_ref</td>
+</tr>
+
+<tr>
+<td>正解Card詳細</td>
+<td>通常Game終了前は非公開</td>
+</tr>
+
+<tr>
+<td>Daily停止時正解</td>
+<td>非公開</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>56. 05-04で定義しない内容</h2>
+
+<table>
+
+<tr>
+<th>設計書</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td>03</td>
+<td>正式なカード比較アルゴリズム</td>
+</tr>
+
+<tr>
+<td>04</td>
+<td>D1・Normalized Data・Version構造</td>
+</tr>
+
+<tr>
+<td>05-03</td>
+<td>履歴Header・開閉動作</td>
+</tr>
+
+<tr>
+<td>05-05</td>
+<td>緑・黄色・灰色・▲・▼・－</td>
+</tr>
+
+<tr>
+<td>05-06</td>
+<td>Responsive</td>
+</tr>
+
+<tr>
+<td>05-07</td>
+<td>Result Screen</td>
+</tr>
+
+<tr>
+<td>06</td>
+<td>API・Game State・stateVersion</td>
+</tr>
+
+<tr>
+<td>08</td>
+<td>Source raw type等からNormalized DataへのMapping</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>57. 実装時調整事項</h2>
+
+<div class="notice">
+
+<ul>
+<li>各セルのPadding。</li>
+<li>LabelとValueのFont Size差。</li>
+<li>2列・3列の境界線。</li>
+<li>非常に長いタイプの折り返し。</li>
+<li>多数Keywordの行間。</li>
+<li>長いskill_textの行間。</li>
+<li>「－」の具体的な文字色。</li>
+<li>長いPack名の折り返し。</li>
+</ul>
+
+<p>
+基本構造を変更せず、
+主にCSSで調整する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>58. 本設計書の位置付け</h2>
+
+<div class="box">
+
+<p>
+本書「05-04 カード詳細UI」は、
+正常に成立した回答カードについて
+どのカード情報をどの位置へ表示するかを定義する。
+</p>
+
+<p>
+カードデータの意味・保存形式は04、
+正式判定は03、
+判定結果の視覚表現は05-05を正とする。
+</p>
+
+</div>
+
+<hr>
+
+<p class="small">
+Shado Guesser 基本設計書<br>
+05-04 カード詳細UI<br><br>
+©Shado Guesser
+</p>
+
+</body>
+</html>

@@ -1,0 +1,2203 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Shado Guesser 基本設計書 - 05-06 レスポンシブ</title>
+
+<style>
+
+body{
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    color:#222;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+}
+
+h1{
+    border-bottom:4px solid #3f51b5;
+    padding-bottom:10px;
+}
+
+h2{
+    margin-top:45px;
+    border-left:8px solid #3f51b5;
+    padding-left:12px;
+}
+
+h3{
+    margin-top:30px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th,
+td{
+    border:1px solid #cccccc;
+    padding:10px;
+    vertical-align:top;
+}
+
+th{
+    background:#3f51b5;
+    color:white;
+}
+
+.box{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+}
+
+.notice{
+    background:#fff8e1;
+    border-left:6px solid #ffc107;
+    padding:15px;
+    margin-top:20px;
+}
+
+.rule{
+    background:#e8eaf6;
+    border-left:6px solid #3f51b5;
+    padding:15px;
+    margin-top:20px;
+}
+
+.warning{
+    background:#ffebee;
+    border-left:6px solid #d32f2f;
+    padding:15px;
+    margin-top:20px;
+}
+
+.example{
+    background:#e8f5e9;
+    border-left:6px solid #4caf50;
+    padding:15px;
+    margin-top:20px;
+}
+
+pre{
+    background:#222;
+    color:#f5f5f5;
+    padding:20px;
+    border-radius:8px;
+    overflow:auto;
+    line-height:1.6;
+}
+
+code{
+    background:#eeeeee;
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.small{
+    color:#777;
+    font-size:0.9em;
+}
+
+@media(max-width:700px){
+
+    body{
+        padding:18px;
+    }
+
+    table{
+        font-size:0.88em;
+    }
+
+    th,
+    td{
+        padding:7px;
+    }
+
+    pre{
+        padding:12px;
+        font-size:0.82em;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Shado Guesser 基本設計書</h1>
+
+<p>
+<strong>05-06：レスポンシブ</strong>
+</p>
+
+<p>
+本設計書では、
+Shado GuesserをPC・タブレット・スマートフォンから利用する際の
+画面幅への対応方針を定義する。
+</p>
+
+<p>
+単純にPC画面を縮小するのではなく、
+カード検索・回答・判定確認というゲームの基本操作を、
+利用可能な表示幅に応じて適切に表示する。
+</p>
+
+<hr>
+
+<h2>1. 目的</h2>
+
+<div class="box">
+
+<p>
+Shado Guesserは初期版では
+<strong>独立したWebアプリ</strong>
+として動作する。
+</p>
+
+<p>
+将来WordPress等の外部サイトへ組み込まれる場合も想定し、
+画面そのものの幅だけではなく、
+Shado Guesserが配置された
+<strong>親コンテンツ領域の横幅</strong>
+へ自然に追従できる構造とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>レスポンシブ基本方針</strong>
+
+<ul>
+<li>PC・タブレット・スマートフォンに対応する。</li>
+<li>ゲーム本体は親要素の横幅を超えない。</li>
+<li>基本的に横スクロールを発生させない。</li>
+<li>操作方法を端末によって大きく変更しない。</li>
+<li>情報の並び順を端末によって大きく変更しない。</li>
+<li>スマートフォンでもカード判定を比較しやすい構造を維持する。</li>
+<li>独立Webアプリと外部サイト組み込み時で同一基本UIを使用する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>2. 対応端末</h2>
+
+<table>
+
+<tr>
+<th>端末</th>
+<th>対応</th>
+<th>主な操作</th>
+</tr>
+
+<tr>
+<td>デスクトップPC</td>
+<td>対応</td>
+<td>マウス・キーボード</td>
+</tr>
+
+<tr>
+<td>ノートPC</td>
+<td>対応</td>
+<td>マウス・タッチパッド・キーボード</td>
+</tr>
+
+<tr>
+<td>タブレット</td>
+<td>対応</td>
+<td>タッチ操作</td>
+</tr>
+
+<tr>
+<td>スマートフォン</td>
+<td>対応</td>
+<td>タッチ操作・ソフトウェアキーボード</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>3. 横幅の基本目安</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>区分</th>
+<th>目安</th>
+</tr>
+
+<tr>
+<td>PC</td>
+<td>1024px以上</td>
+</tr>
+
+<tr>
+<td>タブレット</td>
+<td>768px～1023px程度</td>
+</tr>
+
+<tr>
+<td>スマートフォン</td>
+<td>767px以下</td>
+</tr>
+
+<tr>
+<td>狭いスマートフォン</td>
+<td>374px以下も追加確認対象</td>
+</tr>
+
+</table>
+
+</div>
+
+<div class="notice">
+
+<p>
+これらの値は端末種類を厳密に判定するための値ではない。
+</p>
+
+<p>
+実際には
+<strong>Shado Guesserが使用できるコンテンツ幅</strong>
+を基準としてCSSを調整する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>4. ゲームRoot</h2>
+
+<div class="box">
+
+<p>
+Shado GuesserのUIは
+<code>#sg-app</code>
+内部へ配置する。
+</p>
+
+</div>
+
+<pre>
+&lt;div id="sg-app"&gt;
+
+    Shado Guesser
+
+&lt;/div&gt;
+</pre>
+
+<div class="rule">
+
+<ul>
+<li><code>#sg-app</code> は親要素を超えない。</li>
+<li>ゲーム用Classは <code>sg-</code> prefixを使用する。</li>
+<li>外部サイトのBody幅へ直接依存しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>5. ゲーム本体の横幅</h2>
+
+<div class="rule">
+
+<ul>
+<li><code>width:100%</code> を基本とする。</li>
+<li>必要に応じて <code>max-width</code> を設定する。</li>
+<li><code>box-sizing:border-box</code> を使用する。</li>
+<li>親要素を超える固定Pixel幅を使用しない。</li>
+<li>PCでは中央配置可能とする。</li>
+</ul>
+
+</div>
+
+<pre>
+親コンテンツ
+
+┌──────────────────────────────────────┐
+│                                      │
+│   ┌──────────────────────────────┐   │
+│   │        Shado Guesser         │   │
+│   │                              │   │
+│   │          width:100%          │   │
+│   └──────────────────────────────┘   │
+│                                      │
+└──────────────────────────────────────┘
+</pre>
+
+<hr>
+
+<h2>6. 独立サイト表示</h2>
+
+<pre>
+Browser
+
+┌────────────────────────────────────────────┐
+│                                            │
+│              Shado Guesser                 │
+│                                            │
+│                 #sg-app                    │
+│                                            │
+└────────────────────────────────────────────┘
+</pre>
+
+<div class="rule">
+
+<p>
+初期実装ではこの状態だけでも
+完全にゲームを利用できることを必須とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>7. 将来WordPressへ組み込む場合</h2>
+
+<pre>
+WordPress
+
+┌────────────────────────────────────────────┐
+│ Header                                     │
+├────────────────────────────────────────────┤
+│                                            │
+│             #sg-app                        │
+│                                            │
+│          Shado Guesser                     │
+│                                            │
+├────────────────────────────────────────────┤
+│ Footer                                     │
+└────────────────────────────────────────────┘
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>WordPress専用レイアウトをゲーム本体へ固定しない。</li>
+<li>WordPressのコンテンツ幅に追従する。</li>
+<li>WordPressテーマ全体のCSSを書き換えない。</li>
+<li>Shado Guesser側のCSSを <code>#sg-app</code> 内へ限定する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>8. PC表示</h2>
+
+<pre>
+┌──────────────────────────────────────────────────────┐
+│                    Shado Guesser                     │
+├──────────────────────────────────────────────────────┤
+│                   ゲーム情報                         │
+├──────────────────────────────────────────────────────┤
+│ [ カード名を入力                               ]     │
+│                         [ 回答する ]                  │
+├──────────────────────────────────────────────────────┤
+│                   モード別操作                       │
+├──────────────────────────────────────────────────────┤
+│ ▼ [画像] カード名                                    │
+├──────────────────────────────────────────────────────┤
+│ カードパック                                         │
+├──────────────────────────┬───────────────────────────┤
+│ クラス                   │ レアリティ                │
+├──────────────────────────┼───────────────────────────┤
+│ 分類                     │ タイプ                    │
+├──────────────────┬──────────────────┬─────────────────┤
+│ コスト           │ 攻撃力           │ 体力            │
+└──────────────────┴──────────────────┴─────────────────┘
+</pre>
+
+<div class="rule">
+
+<p>
+PCでは余白を確保しつつ、
+カード情報が不必要に横へ広がりすぎないよう
+最大幅を設定できる構造とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>9. PCのモード別操作</h2>
+
+<table>
+
+<tr>
+<th>モード</th>
+<th>表示する主な補助操作</th>
+</tr>
+
+<tr>
+<td>Solo</td>
+<td>ヒント / 降参</td>
+</tr>
+
+<tr>
+<td>Daily</td>
+<td>ヒント / 降参</td>
+</tr>
+
+<tr>
+<td>2人出題・回答者</td>
+<td>降参</td>
+</tr>
+
+<tr>
+<td>Battle</td>
+<td>退出</td>
+</tr>
+
+</table>
+
+<div class="warning">
+
+<p>
+Responsive設計を理由に、
+本来存在しないヒント・降参等を
+別モードへ表示しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>10. タブレット表示</h2>
+
+<div class="rule">
+
+<ul>
+<li>PCと同じ基本DOMを使用する。</li>
+<li>カード詳細の1列・2列・3列構造を維持する。</li>
+<li>カード画像は80px幅を基本とする。</li>
+<li>入力欄は利用可能幅を使用する。</li>
+<li>ボタンはタッチしやすい領域を確保する。</li>
+<li>横幅に応じてPadding・Gap等を調整する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>11. スマートフォン表示</h2>
+
+<pre>
+┌──────────────────────────────┐
+│        Shado Guesser         │
+├──────────────────────────────┤
+│         ゲーム情報           │
+├──────────────────────────────┤
+│ [ カード名を入力          ]  │
+│                              │
+│        [ 回答する ]          │
+├──────────────────────────────┤
+│         モード別操作         │
+├──────────────────────────────┤
+│ ▶ [画像] カード名            │
+├──────────────────────────────┤
+│ カードパック                 │
+│ ＜カードパック名＞           │
+├──────────────┬───────────────┤
+│ クラス       │ レアリティ    │
+│ エルフ       │ レジェンド    │
+├──────────────┼───────────────┤
+│ 分類         │ タイプ        │
+│ フォロワー   │ 宴楽・学園    │
+├─────────┬─────────┬──────────┤
+│ コスト  │ 攻撃力  │ 体力     │
+│  5 ▲    │  4      │  6 ▼    │
+├─────────┴─────────┴──────────┤
+│ キーワード能力               │
+│ 守護・突進                    │
+├──────────────────────────────┤
+│ 能力テキスト全文              │
+└──────────────────────────────┘
+</pre>
+
+<hr>
+
+<h2>12. Smartphoneのモード別操作</h2>
+
+<h3>Solo / Daily</h3>
+
+<pre>
+┌──────────────┐ ┌──────────────┐
+│   ヒント     │ │     降参     │
+└──────────────┘ └──────────────┘
+</pre>
+
+<h3>2人出題・回答者</h3>
+
+<pre>
+┌──────────────────────────────┐
+│             降参             │
+└──────────────────────────────┘
+</pre>
+
+<h3>Battle</h3>
+
+<pre>
+┌──────────────────────────────┐
+│             退出             │
+└──────────────────────────────┘
+</pre>
+
+<hr>
+
+<h2>13. Smartphoneでも維持する列構成</h2>
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>構成</th>
+</tr>
+
+<tr>
+<td>カードパック</td>
+<td>1列</td>
+</tr>
+
+<tr>
+<td>クラス / レアリティ</td>
+<td>2列</td>
+</tr>
+
+<tr>
+<td>分類 / タイプ</td>
+<td>2列</td>
+</tr>
+
+<tr>
+<td>コスト / 攻撃力 / 体力</td>
+<td>3列</td>
+</tr>
+
+<tr>
+<td>キーワード能力</td>
+<td>1列</td>
+</tr>
+
+<tr>
+<td>能力テキスト</td>
+<td>1列</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<strong>
+特にコスト・攻撃力・体力は
+Smartphoneでも3列を維持する。
+</strong>
+
+<p>
+各回答で数値項目の位置を統一し、
+過去回答との比較をしやすくするためである。
+</p>
+
+</div>
+
+<hr>
+
+<h2>14. 2列領域</h2>
+
+<pre>
+┌──────────────┬───────────────┐
+│ クラス       │ レアリティ    │
+│ ネメシス     │ レジェンド    │
+└──────────────┴───────────────┘
+
+
+┌──────────────┬───────────────┐
+│ 分類         │ タイプ        │
+│ フォロワー   │ 宴楽・兵士    │
+└──────────────┴───────────────┘
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>基本は均等幅。</li>
+<li>Grid/Flexの子要素に <code>min-width:0</code> を使用できる構造。</li>
+<li>長文はセル内部で折り返す。</li>
+<li>セル自体を画面外へはみ出させない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>15. タイプ表示</h2>
+
+<div class="box">
+
+<p>
+複数タイプを持つカードも
+2列レイアウト内で表示する。
+</p>
+
+</div>
+
+<pre>
+宴楽・兵士・学園
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>長い場合はタイプ欄内部で折り返す。</li>
+<li>横スクロールを使用しない。</li>
+<li>極端に小さい文字へ縮小しない。</li>
+<li>「全て」も同じタイプ欄へ表示する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>16. 数値3列領域</h2>
+
+<pre>
+┌─────────┬─────────┬─────────┐
+│ コスト  │ 攻撃力  │ 体力    │
+│  7 ▲    │  5 ▼    │  6      │
+└─────────┴─────────┴─────────┘
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>日本語ラベルを維持する。</li>
+<li>Cost / ATK / HP等へ省略しない。</li>
+<li>ラベルを上、値を下とする。</li>
+<li>▲・▼を値と同じセルへ表示する。</li>
+<li>3セルは均等幅を基本とする。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>17. 比較対象外の数値</h2>
+
+<div class="box">
+
+<p>
+非Followerを含むatk / life比較では
+03・05-05に従い
+「－」を表示する。
+</p>
+
+</div>
+
+<pre>
+┌─────────┬─────────┬─────────┐
+│ コスト  │ 攻撃力  │ 体力    │
+│   3     │   －    │   －    │
+└─────────┴─────────┴─────────┘
+</pre>
+
+<p>
+「－」になっても3列構造自体は変更しない。
+</p>
+
+<hr>
+
+<h2>18. 履歴Header</h2>
+
+<div class="box">
+
+<p>
+履歴Headerには
+開閉Icon・カード画像・カード名を表示する。
+</p>
+
+</div>
+
+<pre>
+┌──────────────────────────────┐
+│ ▶ [画像] カード名            │
+│          カード名2行目       │
+└──────────────────────────────┘
+</pre>
+
+<div class="rule">
+
+<p>
+PC・Tablet・Smartphoneすべてで
+同じ基本構造を使用する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>19. カード画像</h2>
+
+<div class="rule">
+
+<ul>
+<li>80px幅を基本とする。</li>
+<li>高さは自動計算。</li>
+<li>縦横比維持。</li>
+<li>Smartphoneでも画像を原則表示する。</li>
+<li>閉じた履歴でも画像を表示する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>20. カード名</h2>
+
+<div class="box">
+
+<p>
+カード名は画像横の残り横幅を利用する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>太字。</li>
+<li>最大2行を基本とする。</li>
+<li>自然な折り返し。</li>
+<li>手動改行位置をカードデータへ持たせない。</li>
+<li>可読性を損なうほど文字を縮小しない。</li>
+</ul>
+
+</div>
+
+<div class="example">
+
+<pre>
+絶叫と愛絶の顕現・ルルナイ＆ヴァーナレク
+</pre>
+
+</div>
+
+<hr>
+
+<h2>21. カード名領域</h2>
+
+<pre>
+[Icon] [80px Image] [──────── Remaining Width ────────]
+                    ↑
+                    Card Name
+</pre>
+
+<div class="rule">
+
+<pre>
+.sg-history-header{
+    display:flex;
+    align-items:center;
+    width:100%;
+}
+
+.sg-history-image{
+    width:80px;
+    height:auto;
+    flex:0 0 80px;
+}
+
+.sg-history-name{
+    flex:1 1 auto;
+    min-width:0;
+}
+</pre>
+
+</div>
+
+<hr>
+
+<h2>22. 長い文字列</h2>
+
+<div class="rule">
+
+<p>
+以下の文字列は画面外へはみ出さず、
+必要に応じて高さ方向へ拡張する。
+</p>
+
+<ul>
+<li>カード名。</li>
+<li>カードパック名。</li>
+<li>タイプ。</li>
+<li>キーワード能力。</li>
+<li>能力テキスト。</li>
+</ul>
+
+</div>
+
+<pre>
+min-width:0
+
+overflow-wrap
+
+高さ自動拡張
+</pre>
+
+<hr>
+
+<h2>23. 入力欄</h2>
+
+<div class="rule">
+
+<ul>
+<li>Smartphoneでは利用可能幅を最大限使用。</li>
+<li><code>width:100%</code> を基本。</li>
+<li>親要素を超えない。</li>
+<li>文字入力でページ横スクロールを発生させない。</li>
+<li>タップしやすい高さを確保する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>24. Software Keyboard</h2>
+
+<div class="box">
+
+<p>
+SmartphoneでSoftware Keyboardが表示されても、
+入力欄・Suggestionを利用できる構造とする。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+OS・BrowserごとにKeyboard高さが異なるため、
+固定Keyboard高さを前提にレイアウトしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>25. Suggestion</h2>
+
+<pre>
+┌──────────────────────────────┐
+│ 慈愛の凛華・オルテニア      │
+├──────────────────────────────┤
+│ その他の候補                 │
+└──────────────────────────────┘
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>入力欄直下へ表示。</li>
+<li>候補行全体をタップ可能。</li>
+<li>入力欄幅に合わせる。</li>
+<li>長いカード名は折り返す。</li>
+<li>ページ幅を超えない。</li>
+<li>最大10件仕様を端末によって変更しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>26. 回答Button</h2>
+
+<div class="rule">
+
+<ul>
+<li>指で操作可能な十分な領域を確保。</li>
+<li>文字を切らない。</li>
+<li>画面幅を超えない。</li>
+<li>Submitting中のdisabled状態を視覚的に区別する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>27. Enter操作</h2>
+
+<div class="rule">
+
+<p>
+端末や画面幅に関係なく、
+<strong>Enterによる正式回答は行わない。</strong>
+</p>
+
+</div>
+
+<pre>
+PC Enter
+→ Answerしない
+
+
+Mobile Software Keyboard Enter
+→ Answerしない
+
+
+正式Answer
+
+→ 回答するButton
+</pre>
+
+<hr>
+
+<h2>28. タッチ操作領域</h2>
+
+<div class="rule">
+
+<ul>
+<li>履歴Header全体をTap対象。</li>
+<li>Suggestion候補行全体をTap対象。</li>
+<li>回答Button全体をTap対象。</li>
+<li>Hint / Surrender / Exit等はButton全体をTap対象。</li>
+<li>小さなIconや文字だけを唯一のTap対象にしない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>29. 履歴Accordion</h2>
+
+<pre>
+PC
+
+Click
+
+↓
+
+展開 / 閉じる
+
+
+Tablet / Smartphone
+
+Tap
+
+↓
+
+展開 / 閉じる
+</pre>
+
+<div class="rule">
+
+<p>
+入力手段は異なっても、
+ゲーム上の開閉動作は同一とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>30. 履歴の縦方向拡張</h2>
+
+<div class="rule">
+
+<ul>
+<li>Smartphoneで詳細が縦長になることを許可。</li>
+<li>能力テキストを省略しない。</li>
+<li>Keywordを省略しない。</li>
+<li>展開内容を固定高さへ押し込まない。</li>
+<li>ページ全体の通常縦Scrollを利用する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>31. 履歴専用Scrollを作らない</h2>
+
+<div class="warning">
+
+<pre>
+使用しない：
+
+ページ
+
+┌──────────────────────────────┐
+│                              │
+│  履歴                        │
+│  ┌────────────────────────┐  │
+│  │                        │  │
+│  │  この中だけScroll      │  │
+│  │                        │  │
+│  └────────────────────────┘  │
+│                              │
+└──────────────────────────────┘
+</pre>
+
+</div>
+
+<p>
+履歴は通常のページFlow内へ配置する。
+</p>
+
+<hr>
+
+<h2>32. 能力テキスト</h2>
+
+<div class="rule">
+
+<ul>
+<li>全文表示。</li>
+<li>自然に折り返す。</li>
+<li>固定高さなし。</li>
+<li>能力領域だけの内部Scrollなし。</li>
+<li>極端なFont縮小なし。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>33. Battle画面</h2>
+
+<div class="box">
+
+<p>
+Battleでは通常情報に加えて
+手番・残り時間・各Playerの残り回答回数等を表示する。
+</p>
+
+</div>
+
+<pre>
+┌──────────────────────────────┐
+│ Battle                       │
+│                              │
+│ あなたのターン               │
+│ 残り時間 01:24               │
+│                              │
+│ あなた  残り回答 7           │
+│ 相手    残り回答 8           │
+├──────────────────────────────┤
+│ カード入力                   │
+├──────────────────────────────┤
+│          [ 退出 ]            │
+├──────────────────────────────┤
+│ 回答履歴                     │
+└──────────────────────────────┘
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>Battle情報のために履歴幅を縮小しない。</li>
+<li>基本はゲーム上部へ表示。</li>
+<li>常設Sidebarを必須としない。</li>
+<li>Smartphoneでも同一コンテンツ幅へ収める。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>34. Battle Timer</h2>
+
+<div class="rule">
+
+<ul>
+<li>Serverから受け取ったdeadlineを基準とする。</li>
+<li>表示CountdownはBrowserで更新する。</li>
+<li>毎秒Serverへ問い合わせない。</li>
+<li>正式なTimeout判定はServer側。</li>
+</ul>
+
+</div>
+
+<div class="warning">
+
+<p>
+Responsive表示によってTimerの意味・120秒ルールを変更しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>35. Modal</h2>
+
+<div class="rule">
+
+<ul>
+<li>画面幅へ追従。</li>
+<li>左右に最低限の余白。</li>
+<li>固定幅ではみ出さない。</li>
+<li>長い内容は縦方向へ伸ばす。</li>
+<li>操作ButtonをTapしやすくする。</li>
+</ul>
+
+</div>
+
+<p class="small">
+具体的なModal仕様は05-08を正とする。
+</p>
+
+<hr>
+
+<h2>36. Modal表示中のTimer</h2>
+
+<div class="warning">
+
+<p>
+BattleでModalを開いても
+Server側deadlineは停止しない。
+</p>
+
+</div>
+
+<p>
+ModalのResponsive表示と
+ゲーム時間進行は別の責務とする。
+</p>
+
+<hr>
+
+<h2>37. Result Screen</h2>
+
+<div class="box">
+
+<p>
+通常Result ScreenもPC・Smartphoneで
+同じ情報構造を基本とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>正解Cardを読みやすく表示。</li>
+<li>回答数等を狭い幅では縦方向へ配置可能。</li>
+<li>Solo/Dailyでは使用Hint情報を表示可能。</li>
+<li>Battleでは勝敗情報を表示。</li>
+<li>横Scrollを基本的に使用しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>38. Daily停止画面</h2>
+
+<div class="box">
+
+<p>
+Daily停止専用画面も
+PC・Tablet・Smartphoneすべてで
+利用可能な幅へ収める。
+</p>
+
+</div>
+
+<pre>
+本日はカード更新もしくは不具合の影響で
+デイリーは停止されています。
+またAM5:00以降に遊びに来てください。
+</pre>
+
+<div class="rule">
+
+<p>
+Daily停止を
+画面幅によって通常Result Screenへ置換しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>39. Error画面</h2>
+
+<div class="rule">
+
+<ul>
+<li>Error ID等が画面外へはみ出さない。</li>
+<li>問い合わせLinkをTap可能。</li>
+<li>長い内部文字列を不用意に表示しない。</li>
+<li>PC・Smartphoneで同じ安全情報を表示する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>40. 横Scroll</h2>
+
+<div class="box">
+
+<p>
+Shado Guesserの通常ゲームUIでは
+横Scrollを基本的に発生させない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>対象：</strong>
+
+<ul>
+<li>ゲーム本体。</li>
+<li>入力欄。</li>
+<li>Suggestion。</li>
+<li>履歴Card。</li>
+<li>Card詳細。</li>
+<li>Ability Text。</li>
+<li>Result Screen。</li>
+<li>Modal。</li>
+<li>Daily停止画面。</li>
+<li>Error画面。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>41. box-sizing</h2>
+
+<div class="rule">
+
+<pre>
+#sg-app,
+#sg-app *{
+    box-sizing:border-box;
+}
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+サイト全体へ無条件に
+</p>
+
+<pre>
+*{
+    box-sizing:border-box;
+}
+</pre>
+
+<p>
+を適用するのではなく、
+Shado GuesserのRoot内部へ限定する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>42. 外側サイトとの余白</h2>
+
+<div class="box">
+
+<p>
+将来外部サイトへ組み込む場合、
+外側サイトですでに左右Paddingが設定されている可能性がある。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>外側余白を過剰に追加しない。</li>
+<li>Host側の余白との二重化を確認する。</li>
+<li>ゲーム内部Cardには必要なPaddingを持たせる。</li>
+<li>Hostの外側余白とゲーム内部余白を分離する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>43. PC最大幅</h2>
+
+<div class="box">
+
+<p>
+大型Displayでゲームが横へ広がりすぎないよう、
+適切な
+<code>max-width</code>
+を設定できる構造とする。
+</p>
+
+</div>
+
+<pre>
+Large Screen
+
+──────────────────────────────────────────
+
+      ┌────────────────────────────┐
+      │       Shado Guesser        │
+      │                            │
+      │      Maximum Width         │
+      └────────────────────────────┘
+
+──────────────────────────────────────────
+</pre>
+
+<div class="notice">
+
+<p>
+具体的なmax-width値は
+実装時に実画面を確認して決定する。
+</p>
+
+<p>
+将来外部サイトへ組み込む場合も
+Hostの実コンテンツ幅を確認する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>44. Font Size</h2>
+
+<div class="rule">
+
+<ul>
+<li>全要素を一律縮小しない。</li>
+<li>本文はSmartphoneでも読めるSizeを維持。</li>
+<li>Detail LabelはValueより小さくしてよい。</li>
+<li>Card Nameの可読性を優先。</li>
+<li>数値判定を一目で確認できるSize。</li>
+<li>▲・▼を小さくしすぎない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>45. 狭い画面での調整順</h2>
+
+<div class="box">
+
+<p>
+要素が収まりにくい場合は、
+基本的に以下の順で調整する。
+</p>
+
+</div>
+
+<ol>
+
+<li>外側余白を調整。</li>
+
+<li>内部Paddingを調整。</li>
+
+<li>Gapを調整。</li>
+
+<li>Label文字Sizeを若干調整。</li>
+
+<li>Value文字Sizeを必要最小限調整。</li>
+
+<li>長い文字列を折り返す。</li>
+
+</ol>
+
+<div class="warning">
+
+<p>
+最初から列構成を崩したり、
+文字を極端に小さくする方法を選ばない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>46. 狭いSmartphone</h2>
+
+<div class="rule">
+
+<ul>
+<li>374px以下も確認する。</li>
+<li>画面外へはみ出さない。</li>
+<li>80px Card Imageを基本として調整。</li>
+<li>数値3列を維持することを優先。</li>
+<li>2列領域も可能な限り維持。</li>
+<li>長文は折り返す。</li>
+</ul>
+
+</div>
+
+<div class="notice">
+
+<p>
+極端に狭い環境で
+「最大2行のCard Name」と「十分な文字Size」を同時に維持できない場合は、
+文字を読めないSizeまで縮小するより
+可読性を優先する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>47. 画像読み込み失敗時</h2>
+
+<div class="box">
+
+<p>
+Card Imageが読み込めない場合も
+Header全体のLayoutを大きく崩さない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>画像領域の基本幅を維持可能な構造。</li>
+<li>Card Nameを確認可能。</li>
+<li>壊れた画像で横幅が拡大しない。</li>
+</ul>
+
+</div>
+
+<div class="notice">
+
+<p>
+画像参照自体のData異常処理は04・05-04を正とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>48. 端末回転</h2>
+
+<div class="rule">
+
+<ul>
+<li>Portrait専用固定幅を使わない。</li>
+<li>Landscapeへ回転した場合も新しい幅へ追従。</li>
+<li>画面回転だけでGame StateをResetしない。</li>
+<li>Server Sessionを作り直さない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>49. Reloadとは別</h2>
+
+<div class="box">
+
+<p>
+画面回転やResizeは
+ページ再読み込み・Game Restartとは別操作である。
+</p>
+
+</div>
+
+<pre>
+Resize / Orientation Change
+
+↓
+
+Layout再計算
+
+↓
+
+Game State維持
+</pre>
+
+<hr>
+
+<h2>50. JavaScriptで端末判定しすぎない</h2>
+
+<div class="rule">
+
+<ul>
+<li>Responsive LayoutはCSSを基本とする。</li>
+<li>PC専用HTML / Smartphone専用HTMLを作らない。</li>
+<li>同一DOMを再利用する。</li>
+<li>JavaScriptはGame State・UI State管理を中心とする。</li>
+<li>「iPhoneだからこのHTML」等を基本設計にしない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>51. CSS構造例</h2>
+
+<div class="box">
+
+<pre>
+#sg-app{
+    width:100%;
+    max-width:100%;
+}
+
+.sg-game{
+    width:100%;
+    max-width:900px;
+    margin:0 auto;
+}
+
+#sg-app,
+#sg-app *{
+    box-sizing:border-box;
+}
+
+.sg-detail-row--two{
+    display:grid;
+    grid-template-columns:
+        minmax(0, 1fr)
+        minmax(0, 1fr);
+}
+
+.sg-detail-row--three{
+    display:grid;
+    grid-template-columns:
+        minmax(0, 1fr)
+        minmax(0, 1fr)
+        minmax(0, 1fr);
+}
+
+.sg-history-header{
+    display:flex;
+    width:100%;
+    align-items:center;
+}
+
+.sg-history-image{
+    width:80px;
+    height:auto;
+    flex:0 0 80px;
+}
+
+.sg-history-name{
+    flex:1 1 auto;
+    min-width:0;
+}
+</pre>
+
+</div>
+
+<div class="notice">
+
+<p>
+<code>max-width:900px</code>
+は実装例であり確定値ではない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>52. Smartphone CSS例</h2>
+
+<div class="box">
+
+<pre>
+@media (max-width:767px){
+
+    .sg-game{
+        width:100%;
+    }
+
+    .sg-game-inner{
+        padding-left:8px;
+        padding-right:8px;
+    }
+
+    .sg-card-input{
+        width:100%;
+    }
+
+    .sg-detail-field{
+        min-width:0;
+    }
+
+}
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+Smartphone Media Queryだからという理由だけで
+</p>
+
+<pre>
+grid-template-columns:1fr;
+</pre>
+
+<p>
+へ変更し、
+2列・3列をすべて破壊しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>53. Overflow対策</h2>
+
+<div class="rule">
+
+<ul>
+<li>画像へ適切な最大幅。</li>
+<li>Flex子要素へ <code>min-width:0</code>。</li>
+<li>Gridは <code>minmax(0,1fr)</code>。</li>
+<li>長文は折り返す。</li>
+<li>固定幅要素を必要最小限にする。</li>
+<li>外部Host幅を超えない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>54. Browser Zoom</h2>
+
+<div class="box">
+
+<p>
+PC Browserの拡大・縮小等で
+実質表示幅が変化した場合も
+利用可能幅へ追従する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+端末名ではなく
+<strong>実際に利用可能な表示幅</strong>
+を優先する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>55. Mode間の共通化</h2>
+
+<table>
+
+<tr>
+<th>モード</th>
+<th>基本Responsive UI</th>
+<th>主な固有部分</th>
+</tr>
+
+<tr>
+<td>Solo</td>
+<td>共通</td>
+<td>Hint / Surrender</td>
+</tr>
+
+<tr>
+<td>Daily</td>
+<td>共通</td>
+<td>Hint / Surrender / Daily状態</td>
+</tr>
+
+<tr>
+<td>2人出題</td>
+<td>共通</td>
+<td>回答者Surrender</td>
+</tr>
+
+<tr>
+<td>Battle</td>
+<td>共通</td>
+<td>Turn / Timer / Player情報 / Exit</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+モードごとに
+完全に別のSmartphone CSSを作らない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>56. Responsiveで変更しないGame Rule</h2>
+
+<div class="warning">
+
+<p>
+画面幅によって以下を変更しない。
+</p>
+
+<ul>
+<li>回答上限。</li>
+<li>カード判定。</li>
+<li>回答可能範囲。</li>
+<li>Hint Rule。</li>
+<li>Surrender Rule。</li>
+<li>Exit Rule。</li>
+<li>History順。</li>
+<li>History件数。</li>
+<li>タイプ判定。</li>
+<li>Keyword判定。</li>
+<li>▲・▼の意味。</li>
+<li>Battle 120秒。</li>
+<li>Reconnect Rule。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>57. Responsiveで行わないこと</h2>
+
+<div class="warning">
+
+<ul>
+<li>SmartphoneだけCard Imageを非表示。</li>
+<li>SmartphoneだけHistoryを簡易版へ変更。</li>
+<li>SmartphoneだけAbility Textを省略。</li>
+<li>Smartphoneだけ判定項目を削除。</li>
+<li>数値3列を原則縦1列へ変更。</li>
+<li>画面全体の横Scrollを前提とする。</li>
+<li>PC版とSmartphone版で別HTMLを管理。</li>
+<li>Host Site全体のCSSを変更。</li>
+<li>画面幅によってGame Ruleを変更。</li>
+<li>画面幅によって正解情報を追加送信。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>58. 動作確認対象</h2>
+
+<table>
+
+<tr>
+<th>確認対象</th>
+<th>主な確認内容</th>
+</tr>
+
+<tr>
+<td>大型PC</td>
+<td>横へ広がりすぎないか</td>
+</tr>
+
+<tr>
+<td>一般的PC</td>
+<td>標準Layout</td>
+</tr>
+
+<tr>
+<td>Tablet Landscape</td>
+<td>中間幅での配置</td>
+</tr>
+
+<tr>
+<td>Tablet Portrait</td>
+<td>Touch / 折り返し</td>
+</tr>
+
+<tr>
+<td>一般的Smartphone</td>
+<td>入力・History・Card Name・3列</td>
+</tr>
+
+<tr>
+<td>狭いSmartphone</td>
+<td>Overflow・長いCard Name</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>59. 特に確認するカードデータ</h2>
+
+<div class="rule">
+
+<ul>
+<li>長いカード名。</li>
+<li>長いカードパック名。</li>
+<li>複数タイプ。</li>
+<li>タイプ「全て」。</li>
+<li>多数Keyword。</li>
+<li>長いskill_text。</li>
+<li>▲・▼付き数値。</li>
+<li>atk / lifeが「－」のカード。</li>
+<li>非常に長い日本語文字列。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>60. 操作確認</h2>
+
+<div class="rule">
+
+<p>
+表示だけでなく、
+以下の実操作も各画面幅で確認する。
+</p>
+
+<ul>
+<li>Card Name入力。</li>
+<li>Software Keyboard。</li>
+<li>Suggestion選択。</li>
+<li>Answer Button。</li>
+<li>History展開 / 閉じる。</li>
+<li>Hint。</li>
+<li>Surrender。</li>
+<li>Battle Exit。</li>
+<li>Modal操作。</li>
+<li>Battle Timer。</li>
+<li>Orientation Change。</li>
+<li>Reload / Resume。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>61. 05-06で詳細定義しない内容</h2>
+
+<table>
+
+<tr>
+<th>設計書</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td>05-01</td>
+<td>ゲーム画面全体Layout</td>
+</tr>
+
+<tr>
+<td>05-02</td>
+<td>入力UI</td>
+</tr>
+
+<tr>
+<td>05-03</td>
+<td>History</td>
+</tr>
+
+<tr>
+<td>05-04</td>
+<td>Card Detail</td>
+</tr>
+
+<tr>
+<td>05-05</td>
+<td>Judgement Display</td>
+</tr>
+
+<tr>
+<td>05-07</td>
+<td>Result Screen</td>
+</tr>
+
+<tr>
+<td>05-08</td>
+<td>Modal</td>
+</tr>
+
+<tr>
+<td>05-09</td>
+<td>Suggestion・Timer等の細部</td>
+</tr>
+
+<tr>
+<td>06</td>
+<td>Reconnect・deadline・Game State</td>
+</tr>
+
+<tr>
+<td>07</td>
+<td>Daily停止・Maintenance</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>62. 確定事項</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>確定仕様</th>
+</tr>
+
+<tr>
+<td>初期運用</td>
+<td>独立Webアプリ</td>
+</tr>
+
+<tr>
+<td>WordPress</td>
+<td>将来組み込み可能</td>
+</tr>
+
+<tr>
+<td>Root</td>
+<td>#sg-app</td>
+</tr>
+
+<tr>
+<td>CSS Class</td>
+<td>sg- prefix</td>
+</tr>
+
+<tr>
+<td>対応端末</td>
+<td>PC / Tablet / Smartphone</td>
+</tr>
+
+<tr>
+<td>基本幅</td>
+<td>親要素に対して100%</td>
+</tr>
+
+<tr>
+<td>PC最大幅</td>
+<td>max-width設定可能</td>
+</tr>
+
+<tr>
+<td>横Scroll</td>
+<td>原則なし</td>
+</tr>
+
+<tr>
+<td>Card Image</td>
+<td>80px基本・全端末表示</td>
+</tr>
+
+<tr>
+<td>Card Name</td>
+<td>太字・最大2行基本</td>
+</tr>
+
+<tr>
+<td>Card Pack</td>
+<td>1列</td>
+</tr>
+
+<tr>
+<td>Class / Rarity</td>
+<td>Smartphoneでも2列基本</td>
+</tr>
+
+<tr>
+<td>分類 / Type</td>
+<td>Smartphoneでも2列基本</td>
+</tr>
+
+<tr>
+<td>Cost / Atk / Life</td>
+<td>Smartphoneでも3列</td>
+</tr>
+
+<tr>
+<td>非Follower atk / life</td>
+<td>－を表示・3列維持</td>
+</tr>
+
+<tr>
+<td>Keyword</td>
+<td>1列・折り返し</td>
+</tr>
+
+<tr>
+<td>skill_text</td>
+<td>1列・全文表示</td>
+</tr>
+
+<tr>
+<td>History Scroll</td>
+<td>Page全体の通常Scroll</td>
+</tr>
+
+<tr>
+<td>History Header</td>
+<td>全体をClick / Tap対象</td>
+</tr>
+
+<tr>
+<td>Input</td>
+<td>利用可能幅を使用</td>
+</tr>
+
+<tr>
+<td>Enter Answer</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>Suggestion</td>
+<td>Touch対応・最大10件</td>
+</tr>
+
+<tr>
+<td>Solo操作</td>
+<td>Hint / Surrender</td>
+</tr>
+
+<tr>
+<td>Daily操作</td>
+<td>Hint / Surrender</td>
+</tr>
+
+<tr>
+<td>2人出題回答者</td>
+<td>Surrender</td>
+</tr>
+
+<tr>
+<td>Battle</td>
+<td>Turn / Timer / Exit</td>
+</tr>
+
+<tr>
+<td>Battle Timer</td>
+<td>Server deadline基準</td>
+</tr>
+
+<tr>
+<td>Modal中Timer</td>
+<td>停止しない</td>
+</tr>
+
+<tr>
+<td>端末別HTML</td>
+<td>作成しない</td>
+</tr>
+
+<tr>
+<td>基本DOM</td>
+<td>共通</td>
+</tr>
+
+<tr>
+<td>Responsive制御</td>
+<td>CSS中心</td>
+</tr>
+
+<tr>
+<td>Orientation Change</td>
+<td>Game State維持</td>
+</tr>
+
+<tr>
+<td>Game Rule</td>
+<td>画面幅によって変更しない</td>
+</tr>
+
+<tr>
+<td>Host CSS</td>
+<td>変更しない</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>63. 実装時調整事項</h2>
+
+<div class="notice">
+
+<ul>
+<li>ゲーム本体の具体的max-width。</li>
+<li>PCの左右余白。</li>
+<li>Smartphone内部Padding。</li>
+<li>Card Name Font Size。</li>
+<li>長いCard Nameの2行表示調整。</li>
+<li>狭い端末での80px画像とのBalance。</li>
+<li>Type欄の折り返し。</li>
+<li>数値3列のFont Size。</li>
+<li>Software KeyboardとSuggestionの位置関係。</li>
+<li>回答後のScroll位置。</li>
+<li>外部Hostへ組み込む場合の外側Padding。</li>
+<li>Browser Zoom時の表示。</li>
+</ul>
+
+<p>
+これらは基本構造を変更せず、
+実装・実機確認後にCSS中心で調整する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>64. 本設計書の位置付け</h2>
+
+<div class="box">
+
+<p>
+本書「05-06 レスポンシブ」は、
+Shado GuesserのゲームUIを
+さまざまな表示幅で利用するための
+レイアウト原則を定義する。
+</p>
+
+<p>
+ゲームルールやカード判定を変更するものではなく、
+05-01～05-05で定義した情報構造を
+PC・Tablet・Smartphoneで維持することを目的とする。
+</p>
+
+</div>
+
+<hr>
+
+<p class="small">
+Shado Guesser 基本設計書<br>
+05-06 レスポンシブ<br><br>
+©Shado Guesser
+</p>
+
+</body>
+</html>

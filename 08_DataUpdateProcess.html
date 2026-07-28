@@ -1,0 +1,4343 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Shado Guesser 基本設計書 - 08 データ取得・更新手順</title>
+
+<style>
+
+body{
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    color:#222;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+}
+
+h1{
+    border-bottom:4px solid #3f51b5;
+    padding-bottom:10px;
+}
+
+h2{
+    margin-top:45px;
+    border-left:8px solid #3f51b5;
+    padding-left:12px;
+}
+
+h3{
+    margin-top:30px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th,
+td{
+    border:1px solid #cccccc;
+    padding:10px;
+    vertical-align:top;
+}
+
+th{
+    background:#3f51b5;
+    color:white;
+}
+
+.box{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+}
+
+.notice{
+    background:#fff8e1;
+    border-left:6px solid #ffc107;
+    padding:15px;
+    margin-top:20px;
+}
+
+.rule{
+    background:#e8eaf6;
+    border-left:6px solid #3f51b5;
+    padding:15px;
+    margin-top:20px;
+}
+
+.warning{
+    background:#ffebee;
+    border-left:6px solid #d32f2f;
+    padding:15px;
+    margin-top:20px;
+}
+
+.example{
+    background:#e8f5e9;
+    border-left:6px solid #4caf50;
+    padding:15px;
+    margin-top:20px;
+}
+
+pre{
+    background:#222;
+    color:#f5f5f5;
+    padding:20px;
+    border-radius:8px;
+    overflow:auto;
+    line-height:1.6;
+}
+
+code{
+    background:#eeeeee;
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.small{
+    color:#777;
+    font-size:0.9em;
+}
+
+@media(max-width:700px){
+
+    body{
+        padding:18px;
+    }
+
+    table{
+        font-size:0.88em;
+    }
+
+    th,
+    td{
+        padding:7px;
+    }
+
+    pre{
+        padding:12px;
+        font-size:0.82em;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Shado Guesser 基本設計書</h1>
+
+<p>
+<strong>08：データ取得・更新手順</strong>
+</p>
+
+<p>
+本設計書では、
+Shado Guesserで使用するカードデータについて、
+公式サイト由来の構造化Source Dataの取得、
+Source Archive、
+Importer、
+Mapping、
+Normalized Data、
+Draft Version、
+Validation、
+Diff Report、
+Search Index、
+Published、
+Current変更までの
+正式なデータ更新手順を定義する。
+</p>
+
+<hr>
+
+<h2>1. 基本原則</h2>
+
+<div class="rule">
+
+<strong>
+Shado Guesserの正式カードデータは
+以下の経路でのみ生成する。
+</strong>
+
+<pre>
+Official Structured Source Data
+
+↓
+
+Sanitized Source Archive
+
+↓
+
+Source Schema Validation
+
+↓
+
+Deterministic Importer
+
+↓
+
+Mapping Validation
+
+↓
+
+Normalized Candidate Snapshot
+
+↓
+
+Draft Version生成
+
+↓
+
+Data Validation
+
+↓
+
+Diff Report
+
+↓
+
+Search Index生成
+
+↓
+
+Search Index Validation
+
+↓
+
+Admin Review
+
+↓
+
+Published
+
+↓
+
+Current Switch
+
+↓
+
+Current Daily Suspend
+
+↓
+
+New Games Use New Version
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+AIや人間による目視転記を
+正式カードデータ生成経路として使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>2. Draft前とDraft後のValidation</h2>
+
+<div class="box">
+
+<p>
+「Validation」という言葉を
+1種類の処理として扱わない。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>段階</th>
+<th>役割</th>
+</tr>
+
+<tr>
+<td>Source Schema Validation</td>
+<td>Source構造そのものがImporterで処理可能か確認</td>
+</tr>
+
+<tr>
+<td>Mapping Validation</td>
+<td>Source IDを既知Mappingで変換可能か確認</td>
+</tr>
+
+<tr>
+<td>Data Validation</td>
+<td>生成されたDraft Snapshotがゲーム利用可能か確認</td>
+</tr>
+
+<tr>
+<td>Search Index Validation</td>
+<td>Version別Search IndexがDraftと一致するか確認</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+Source SchemaやMappingが成立せず
+Normalized Candidate自体を正常生成できない場合は、
+通常のDraft Versionを作成しない。
+</p>
+
+<p>
+一方、
+Normalized Candidateを正常生成できた後は
+Draft Versionを作成し、
+そのDraftに対して正式なData Validationを行う。
+</p>
+
+</div>
+
+<hr>
+
+<h2>3. 正式Source Data</h2>
+
+<div class="box">
+
+<p>
+公式サイトがカード情報表示等に使用している
+構造化JSON等の機械可読データを
+正式Sourceとして使用する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+HTML画面からカード内容を読み取って
+全カードデータを再構成する方式より、
+公式側の構造化Dataを優先する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>4. 初期版のSource取得</h2>
+
+<pre>
+Official Site
+
+↓
+
+Structured Data取得
+
+↓
+
+必要領域を抽出
+
+↓
+
+認証・Session情報を除外
+
+↓
+
+Sanitized Source Archive
+
+↓
+
+Importer
+</pre>
+
+<div class="rule">
+
+<p>
+初期版では
+データ更新作業時にSource Dataを取得し、
+Importerへ投入する運用を許可する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>5. 将来自動取得する場合</h2>
+
+<div class="notice">
+
+<p>
+将来、
+公式に利用可能な安定した取得経路が確立した場合は、
+Source取得部分を自動化してよい。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+自動取得できることと
+自動Publish・自動Current変更は別である。
+</p>
+
+</div>
+
+<pre>
+Authorized Auto Fetch
+
+↓
+
+Sanitized Source Archive
+
+↓
+
+Schema Validation
+
+↓
+
+Import
+
+↓
+
+Mapping Validation
+
+↓
+
+Draft
+
+↓
+
+Data Validation
+
+↓
+
+Diff
+
+↓
+
+Search Index
+
+↓
+
+Admin Review
+
+↓
+
+Publish
+
+↓
+
+必要時のみAdminがCurrent変更
+</pre>
+
+<hr>
+
+<h2>6. AIの位置付け</h2>
+
+<table>
+
+<tr>
+<th>用途</th>
+<th>可否</th>
+</tr>
+
+<tr>
+<td>Source取得場所の調査補助</td>
+<td>可</td>
+</tr>
+
+<tr>
+<td>Source Schema調査補助</td>
+<td>可</td>
+</tr>
+
+<tr>
+<td>Importer開発補助</td>
+<td>可</td>
+</tr>
+
+<tr>
+<td>Validation Error調査補助</td>
+<td>可</td>
+</tr>
+
+<tr>
+<td>未知ID調査補助</td>
+<td>可</td>
+</tr>
+
+<tr>
+<td>Card画像を見て正式Dataへ転記</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>HTMLからAIで全Card JSON生成</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>未知値を推測して補完</td>
+<td>不可</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<strong>
+AIを正式Data Sourceにはしない。
+</strong>
+
+</div>
+
+<hr>
+
+<h2>7. Sourceを手作業で修正しない</h2>
+
+<div class="warning">
+
+<pre>
+Official Source
+
+type = 4
+
+↓
+
+人間・AI
+
+「これはSpellだろう」
+
+↓
+
+Source JSONを
+type = 2に書換
+
+×
+
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+Source値からShado Guesserの意味への変換は
+Importer / Mappingが担当する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>8. Source Archive保存対象</h2>
+
+<p>
+ゲームデータ生成に必要な構造化Dataのみ保存する。
+</p>
+
+<pre>
+cards
+
+card_details
+
+card_sets
+
+classes
+
+types
+
+rarities
+
+tribes
+
+その他必要なCard Master Data
+</pre>
+
+<hr>
+
+<h2>9. Source Archive除外対象</h2>
+
+<div class="warning">
+
+<ul>
+<li>CSRF Token。</li>
+<li>Authorization。</li>
+<li>Cookie。</li>
+<li>Session Token。</li>
+<li>User ID。</li>
+<li>Login State。</li>
+<li>その他ゲームデータ生成に不要な認証情報。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>10. Source内部値</h2>
+
+<div class="rule">
+
+<p>
+保存対象として切り出したSource Data内部の値は
+原則として変更しない。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+Official Source
+
+type = 4
+tribes = [19]
+atk = 0
+life = 0
+
+↓
+
+Source Archive
+
+type = 4
+tribes = [19]
+atk = 0
+life = 0
+</pre>
+
+</div>
+
+<hr>
+
+<h2>11. Source Archive</h2>
+
+<pre>
+source-archive/
+
+└─ 2026-08-01-01/
+
+   ├─ card-details.json
+
+   ├─ card-related-data.json
+
+   └─ source-manifest.json
+</pre>
+
+<div class="warning">
+
+<p>
+Source Archiveを
+Public Pages配下へ配置しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>12. Source Manifest</h2>
+
+<div class="example">
+
+<pre>
+{
+    "collected_at": "...",
+
+    "source_schema_version": "...",
+
+    "raw_data_hash": "...",
+
+    "importer_version": "...",
+
+    "source_files": [
+        "card-details.json",
+        "card-related-data.json"
+    ]
+}
+</pre>
+
+</div>
+
+<hr>
+
+<h2>13. raw_data_hash</h2>
+
+<div class="rule">
+
+<p>
+Importerへ入力したSource DataからHashを生成し、
+後から同一Sourceを使用したか確認可能とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>14. importer_version</h2>
+
+<pre>
+importer_version
+1.0.0
+</pre>
+
+<div class="rule">
+
+<p>
+どのImporter Logicが
+Data Version生成に使用されたか追跡可能にする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>15. source_schema_version</h2>
+
+<div class="box">
+
+<p>
+Importerが期待するSource Schemaについて
+識別可能なVersion情報を保持する。
+</p>
+
+</div>
+
+<p>
+公式側に明示的Schema Versionがない場合でも、
+Importer側で対応Schemaを識別できる管理値を持たせてよい。
+</p>
+
+<hr>
+
+<h2>16. Deterministic Importer</h2>
+
+<div class="rule">
+
+<pre>
+Same Source Data
+
++
+
+Same Importer Version
+
++
+
+Same Mapping
+
+↓
+
+Same Normalized Data
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+Importer実行中に
+担当者ごとに結果が変わる人間判断・AI判断を入れない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>17. Source DataとNormalized Data</h2>
+
+<table>
+
+<tr>
+<th>Data</th>
+<th>意味</th>
+</tr>
+
+<tr>
+<td>Source Data</td>
+<td>公式側の元値</td>
+</tr>
+
+<tr>
+<td>Normalized Candidate</td>
+<td>ImporterによってShado Guesser形式へ変換された候補Snapshot</td>
+</tr>
+
+<tr>
+<td>Draft Version</td>
+<td>Validation等の対象としてD1へ作成されたVersion Snapshot</td>
+</tr>
+
+<tr>
+<td>Published Version</td>
+<td>Validation・Reviewを通過したImmutable Snapshot</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>18. Source主Card項目</h2>
+
+<pre>
+card_id
+name
+atk
+life
+cost
+type
+class
+card_set_id
+rarity
+tribes
+skill_text
+flavour_text
+is_token
+card_image_hash
+starter_card
+evo
+</pre>
+
+<div class="warning">
+
+<p>
+Source Schema変更時に
+似たFieldへ自動読み替えしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>19. card_id</h2>
+
+<pre>
+Source
+
+10211110
+
+↓
+
+Normalized
+
+"10211110"
+</pre>
+
+<div class="rule">
+
+<p>
+Shado Guesserでは
+card_idを文字列として扱う。
+</p>
+
+</div>
+
+<hr>
+
+<h2>20. name</h2>
+
+<div class="rule">
+
+<p>
+Card NameはSourceの正式文字列を使用する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+ImporterやAIが
+表記を勝手に修正しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>21. class</h2>
+
+<pre>
+0 = ニュートラル
+1 = エルフ
+2 = ロイヤル
+3 = ウィッチ
+4 = ドラゴン
+5 = ナイトメア
+6 = ビショップ
+7 = ネメシス
+</pre>
+
+<div class="rule">
+
+<p>
+未知class IDはImport Errorとする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>22. Source type</h2>
+
+<div class="warning">
+
+<p>
+Sourceの
+<code>type</code>
+とShado Guesser側の
+<code>type</code>
+を直接同一視しない。
+</p>
+
+</div>
+
+<pre>
+source_type_id
+
+↓
+
+Explicit Mapping
+
+↓
+
+Shado Guesser type
+</pre>
+
+<hr>
+
+<h2>23. Shado Guesser type</h2>
+
+<pre>
+1 = フォロワー
+2 = スペル
+3 = アミュレット
+</pre>
+
+<div class="rule">
+
+<p>
+Shado Guesser側に
+type=4は作成しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>24. 未知Source type</h2>
+
+<pre>
+source_type_id = 4
+
+↓
+
+Mappingあり？
+
+YES
+→ Mappingどおり変換
+
+NO
+→ UNKNOWN_TYPE_ID
+→ Import停止
+</pre>
+
+<div class="warning">
+
+<p>
+Tokenかどうか、
+Card Name、
+能力文等からTypeを推測しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>25. rarity</h2>
+
+<pre>
+source rarity_id
+
+↓
+
+RARITY_MAPPING
+
+↓
+
+Shado Guesser rarity
+</pre>
+
+<div class="rule">
+
+<p>
+未知Rarity IDはImport Error。
+</p>
+
+</div>
+
+<hr>
+
+<h2>26. tribes</h2>
+
+<div class="rule">
+
+<p>
+Sourceのtribes配列を
+明示的Mapping後に
+<code>card_tribes</code>
+へ正規化する。
+</p>
+
+</div>
+
+<pre>
+Source
+
+tribes = [5]
+
+↓
+
+TRIBE_MAPPING
+
+↓
+
+card_tribes
+</pre>
+
+<hr>
+
+<h2>27. tribe_mode</h2>
+
+<div class="box">
+
+<p>
+通常のタイプと
+「全て」を区別する。
+</p>
+
+</div>
+
+<pre>
+tribe_mode = "normal"
+
+または
+
+tribe_mode = "all"
+</pre>
+
+<div class="warning">
+
+<p>
+「全て」を
+存在する全Tribeのrelationへ展開して保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>28. Token</h2>
+
+<div class="rule">
+
+<strong>
+Token判定は
+<code>is_token</code>
+のみを正式基準とする。
+</strong>
+
+</div>
+
+<div class="warning">
+
+<p>
+card_id、
+type、
+card_set_id等から
+Tokenを推測しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>29. Basic</h2>
+
+<pre>
+is_token = false
+
+AND
+
+card_set_id = 10000
+
+↓
+
+Basic
+</pre>
+
+<hr>
+
+<h2>30. 通常Pack</h2>
+
+<pre>
+is_token = false
+
+AND
+
+card_set_id != 10000
+
+↓
+
+通常Card Pack
+</pre>
+
+<div class="rule">
+
+<p>
+Pack Name・release_order等は
+card_sets Masterで管理する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>31. TokenのPack</h2>
+
+<div class="warning">
+
+<p>
+Tokenを
+「どの通常Pack由来か」という関係へ
+Importerが自動所属させない。
+</p>
+
+</div>
+
+<p>
+Custom ModeにおけるTokenは
+Pack Filterを適用しない仕様を維持する。
+</p>
+
+<hr>
+
+<h2>32. starter_card</h2>
+
+<pre>
+starter_card.card_set_id
+
+↓
+
+starter_set_id
+</pre>
+
+<div class="rule">
+
+<p>
+starter_set_idは
+Pack判定・Token判定・Rotation判定に使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>33. cost</h2>
+
+<div class="rule">
+
+<p>
+Normalized costは
+0以上の整数を必須とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>34. atk / life</h2>
+
+<div class="rule">
+
+<p>
+Followerでは整数値を保持する。
+</p>
+
+<p>
+Non-Followerでは
+Normalized Data上
+<code>NULL</code>
+とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>35. Non-Followerの0</h2>
+
+<pre>
+Source
+
+atk = 0
+life = 0
+
+↓
+
+Normalized Type
+Non-Follower
+
+↓
+
+atk = NULL
+life = NULL
+</pre>
+
+<div class="rule">
+
+<p>
+Source上の0を
+ゲーム上のStat 0として扱わない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>36. Follower Stat欠損</h2>
+
+<div class="warning">
+
+<p>
+Normalized TypeがFollowerなのに
+atk / lifeを正常取得できない場合は
+Data Validation Errorとする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>37. skill_text</h2>
+
+<div class="rule">
+
+<p>
+Source原文を保持する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+能力内容を自然言語解釈して
+Importerが別文章へ書き換えない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>38. flavour_text</h2>
+
+<div class="rule">
+
+<p>
+Source原文を保持する。
+</p>
+
+<p>
+Sourceに存在しない場合はNULLを許可する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>39. Keyword</h2>
+
+<div class="rule">
+
+<p>
+公式SourceにStructured Keyword Dataがある場合は
+それを最優先する。
+</p>
+
+<p>
+存在しない場合のみ、
+公式Markupから抽出する。
+</p>
+
+</div>
+
+<pre>
+&lt;color=Keyword&gt;守護&lt;/color&gt;
+
+↓
+
+守護
+</pre>
+
+<hr>
+
+<h2>40. Keyword推測禁止</h2>
+
+<div class="warning">
+
+<pre>
+能力文
+
+↓
+
+AI / Importerによる意味推測
+
+↓
+
+「これは突進」
+
+×
+
+</pre>
+
+</div>
+
+<p>
+Keywordは
+構造化情報または明示的公式Markupを基準とする。
+</p>
+
+<hr>
+
+<h2>41. Keyword Mapping</h2>
+
+<pre>
+Extracted Keyword
+
+↓
+
+Known Master？
+
+YES
+→ card_keywords
+
+NO
+→ UNKNOWN_KEYWORD
+→ Error
+</pre>
+
+<hr>
+
+<h2>42. evo</h2>
+
+<div class="rule">
+
+<p>
+Source Archiveでは
+evo情報を失わず保存する。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+初期版のゲーム判定に不要であれば、
+進化後DataをD1主要Card Masterへ
+すべて保持することは必須としない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>43. Image Source</h2>
+
+<pre>
+Source Image Identifier
+
+↓
+
+Importer
+
+↓
+
+image_ref
+
+↓
+
+D1
+</pre>
+
+<hr>
+
+<h2>44. image_ref</h2>
+
+<div class="rule">
+
+<p>
+D1へ画像Binary / Base64を保存せず
+<code>image_ref</code>
+のみ保存する。
+</p>
+
+</div>
+
+<pre>
+SG_CONFIG.imageBaseUrl
+
++
+
+image_ref
+
+↓
+
+Browser Image Request
+</pre>
+
+<hr>
+
+<h2>45. 画像Mapping不明時</h2>
+
+<div class="warning">
+
+<p>
+画像URL構造が変化した場合、
+推測でimage_refを生成しない。
+</p>
+
+<p>
+Importer Ruleを確認・修正してから再Importする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>46. enabled</h2>
+
+<div class="rule">
+
+<p>
+正常にゲーム利用可能なCardを
+<code>enabled=true</code>
+とする。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+Data Errorを大量に
+enabled=falseで隠してPublishすることを
+基本運用にはしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>47. Full Snapshot</h2>
+
+<div class="rule">
+
+<strong>
+Data VersionはVersion単位の全件Snapshot。
+</strong>
+
+</div>
+
+<pre>
+Version A
+
+Cards全件
+
+
+Version B
+
+Cards全件
+
+
+Version C
+
+Cards全件
+</pre>
+
+<p>
+Version間Diffだけを
+正式Card Dataとして保存する方式にはしない。
+</p>
+
+<hr>
+
+<h2>48. Snapshotの利点</h2>
+
+<ul>
+<li>進行中GameのVersion固定。</li>
+<li>Old Version参照。</li>
+<li>Rollback。</li>
+<li>DiffとGame参照の分離。</li>
+<li>Published SnapshotのImmutable化。</li>
+</ul>
+
+<hr>
+
+<h2>49. Import開始</h2>
+
+<pre>
+Source取得
+
+↓
+
+Sanitize
+
+↓
+
+Source Archive
+
+↓
+
+raw_data_hash
+
+↓
+
+Source Schema Validation
+
+↓
+
+Importer
+</pre>
+
+<hr>
+
+<h2>50. Source Schema Validation</h2>
+
+<div class="rule">
+
+<p>
+Importer本処理前に
+期待するSource構造が存在するか確認する。
+</p>
+
+</div>
+
+<pre>
+data
+
+card_details
+
+common
+
+card_id
+
+name
+</pre>
+
+<hr>
+
+<h2>51. Schema変更</h2>
+
+<div class="warning">
+
+<pre>
+Expected:
+
+tribes
+
+
+Actual:
+
+tribe_ids
+
+↓
+
+「多分同じ」
+
+×
+
+↓
+
+SOURCE_SCHEMA_MISMATCH
+
+↓
+
+Import停止
+</pre>
+
+</div>
+
+<hr>
+
+<h2>52. Schema変更対応</h2>
+
+<pre>
+Schema Change確認
+
+↓
+
+公式Source調査
+
+↓
+
+Importer修正
+
+↓
+
+source_schema_version更新
+
+↓
+
+importer_version更新
+
+↓
+
+再Import
+</pre>
+
+<hr>
+
+<h2>53. Mapping管理</h2>
+
+<pre>
+CLASS_MAPPING
+
+TYPE_MAPPING
+
+RARITY_MAPPING
+
+TRIBE_MAPPING
+
+CARD_SET_MAPPING
+
+KEYWORD_MAPPING
+</pre>
+
+<div class="rule">
+
+<p>
+Source IDとShado Guesserの意味を
+明示的Mappingとして管理する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>54. Mappingで禁止すること</h2>
+
+<div class="warning">
+
+<ul>
+<li>ID桁数から意味を推測。</li>
+<li>前後IDから名称を推測。</li>
+<li>Card NameからTribeを推測。</li>
+<li>Ability TextからTypeを推測。</li>
+<li>Token card_set_idから通常Packを推測。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>55. Mapping Validation</h2>
+
+<div class="rule">
+
+<p>
+Normalized Candidate生成前に、
+必要なSource IDが
+すべて既知Mappingで処理できることを確認する。
+</p>
+
+</div>
+
+<pre>
+Unknown Type
+→ ERROR
+
+Unknown Rarity
+→ ERROR
+
+Unknown Tribe
+→ ERROR
+
+Unknown Card Set
+→ ERROR
+
+Unknown Keyword
+→ ERROR
+</pre>
+
+<hr>
+
+<h2>56. 未知ID</h2>
+
+<pre>
+UNKNOWN_TYPE_ID
+
+UNKNOWN_RARITY_ID
+
+UNKNOWN_TRIBE_ID
+
+UNKNOWN_CARD_SET_ID
+
+UNKNOWN_KEYWORD
+</pre>
+
+<div class="warning">
+
+<p>
+未知IDを自動補完しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>57. 未知ID対応</h2>
+
+<pre>
+Unknown ID
+
+↓
+
+Import停止
+
+↓
+
+Error Report
+
+↓
+
+公式情報確認
+
+↓
+
+Mapping追加
+
+↓
+
+Importer / Mapping Version更新
+
+↓
+
+再Import
+</pre>
+
+<hr>
+
+<h2>58. Normalized Candidate Snapshot</h2>
+
+<div class="box">
+
+<p>
+Schema Validation・Importer・Mapping Validationが成立した後、
+Shado Guesser形式の
+全件Normalized Candidate Snapshotを生成する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+この時点ではまだPublishedではない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>59. Draft Version生成</h2>
+
+<div class="rule">
+
+<strong>
+Normalized Candidate Snapshotが生成できた時点で
+Draft Versionを作成する。
+</strong>
+
+</div>
+
+<pre>
+Normalized Candidate
+
+↓
+
+Draft Version
+
+status = draft
+
+↓
+
+Data Validation
+</pre>
+
+<div class="warning">
+
+<p>
+Source Schema不一致や
+Mapping不能でImport自体が成立しないデータは
+通常のDraftとして作成しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>60. DraftはGameで使用しない</h2>
+
+<div class="warning">
+
+<ul>
+<li>DraftをCurrentにしない。</li>
+<li>Soloで使用しない。</li>
+<li>Dailyで使用しない。</li>
+<li>Challengeで使用しない。</li>
+<li>Battleで使用しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>61. Version識別子</h2>
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>用途</th>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>D1内部Primary Key・Server / DO内部参照</td>
+</tr>
+
+<tr>
+<td><code>version_code</code></td>
+<td>人間向け表示・Search Index Filename・Client公開用</td>
+</tr>
+
+</table>
+
+<div class="warning">
+
+<p>
+曖昧な
+<code>dataVersion</code>
+という名称を新規設計では使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>62. Version Code</h2>
+
+<pre>
+YYYY-MM-DD-serial
+</pre>
+
+<div class="example">
+
+<pre>
+2026-08-01-01
+
+2026-08-01-02
+</pre>
+
+</div>
+
+<p>
+日付部分はJST基準。
+</p>
+
+<hr>
+
+<h2>63. data_versions</h2>
+
+<div class="box">
+
+<p>
+Data Versionには少なくとも
+以下の生成・追跡情報を保持する。
+</p>
+
+</div>
+
+<pre>
+data_version_id
+version_code
+raw_data_hash
+importer_version
+source_schema_version
+created_at
+published_at
+status
+is_current
+</pre>
+
+<div class="notice">
+
+<p>
+Currentの運営操作は独立操作として扱うが、
+D1上では
+<code>is_current</code>
+等により
+Current Pointerを表現してよい。
+</p>
+
+<p>
+常にCurrentが最大1Versionとなる制約を維持する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>64. Provenance</h2>
+
+<div class="rule">
+
+<p>
+Published Versionから
+少なくとも以下を追跡可能にする。
+</p>
+
+</div>
+
+<pre>
+Data Version
+
+↓
+
+raw_data_hash
+
+↓
+
+Source Archive
+
+↓
+
+source_schema_version
+
+↓
+
+importer_version
+
+↓
+
+Validation Result
+
+↓
+
+Diff Report
+</pre>
+
+<hr>
+
+<h2>65. Data Validation</h2>
+
+<div class="box">
+
+<p>
+Draft Version生成後、
+そのDraft Snapshotが
+ゲーム利用可能かData Validationを実施する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+Data Validation Errorが1件でも存在する場合、
+Publish不可。
+</p>
+
+</div>
+
+<hr>
+
+<h2>66. Validation Level</h2>
+
+<table>
+
+<tr>
+<th>Level</th>
+<th>処理</th>
+</tr>
+
+<tr>
+<td>Error</td>
+<td>Publish不可</td>
+</tr>
+
+<tr>
+<td>Warning</td>
+<td>管理画面表示。Error 0ならReview後Publish可能</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>67. Errorの原則</h2>
+
+<div class="rule">
+
+<p>
+Card判定・回答範囲・画像表示等に影響し、
+正常なGame動作を保証できない問題は
+Errorとする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>68. Warningの原則</h2>
+
+<div class="example">
+
+<pre>
+Card Name変更
+1件
+
+skill_text変更
+8件
+</pre>
+
+</div>
+
+<p>
+Gameを壊さないが
+管理者確認が必要な変化をWarningとする。
+</p>
+
+<hr>
+
+<h2>69. 必須Data Validation</h2>
+
+<ul>
+<li>card_id存在。</li>
+<li>Version内card_id重複なし。</li>
+<li>name存在。</li>
+<li>class正常。</li>
+<li>type正常。</li>
+<li>rarity正常。</li>
+<li>tribe正常。</li>
+<li>card_set正常。</li>
+<li>costが0以上の整数。</li>
+<li>Follower atk / life存在。</li>
+<li>is_token Boolean。</li>
+<li>tribe_modeがnormal / all。</li>
+<li>Relation参照先存在。</li>
+<li>enabled Cardのimage_ref存在。</li>
+<li>Keyword整合。</li>
+</ul>
+
+<hr>
+
+<h2>70. card_id重複</h2>
+
+<div class="warning">
+
+<pre>
+Same Draft Version
+
+card_id = 123
+card_id = 123
+
+↓
+
+Validation Error
+</pre>
+
+</div>
+
+<hr>
+
+<h2>71. Unknown Type</h2>
+
+<div class="warning">
+
+<p>
+Source Typeを正式なShado Guesser Typeへ変換できないCardが
+1枚でも存在する場合はPublish不可。
+</p>
+
+</div>
+
+<hr>
+
+<h2>72. Unknown Card Set</h2>
+
+<div class="warning">
+
+<p>
+未知の通常Card Setを
+名称・release_order推測で自動登録しない。
+</p>
+
+</div>
+
+<pre>
+New card_set_id
+
+↓
+
+UNKNOWN_CARD_SET_ID
+
+↓
+
+Official Name確認
+
+↓
+
+release_order確認
+
+↓
+
+Mapping追加
+
+↓
+
+再Import
+</pre>
+
+<hr>
+
+<h2>73. 新規Card</h2>
+
+<div class="rule">
+
+<p>
+Previous Versionに存在せず
+New Sourceに正常なCardが存在する場合、
+新規Cardとして取り込む。
+</p>
+
+</div>
+
+<p>
+新規Cardであること自体はErrorではない。
+</p>
+
+<hr>
+
+<h2>74. Existing Card変更</h2>
+
+<div class="rule">
+
+<p>
+既存card_idのSource内容が変更された場合、
+New Draft Snapshotへその変更を反映する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>75. Previous Card消失</h2>
+
+<div class="warning">
+
+<p>
+Previous Versionに存在したCardが
+New Sourceから消失した場合、
+無条件で削除扱いにしない。
+</p>
+
+</div>
+
+<pre>
+Previous Versionに存在
+
+↓
+
+New Sourceに存在しない
+
+↓
+
+MISSING_CARD_FROM_SOURCE
+
+↓
+
+取得漏れ？
+Schema変更？
+Official削除？
+
+↓
+
+確認
+</pre>
+
+<hr>
+
+<h2>76. 件数確認</h2>
+
+<div class="example">
+
+<pre>
+Source Cards
+3542
+
+Normalized Cards
+3542
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+理由なくCard件数が大幅減少した場合は
+Publishさせない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>77. Token件数</h2>
+
+<pre>
+Non Token
+3200
+
+Token
+342
+</pre>
+
+<p>
+Token数の急変も
+Source取得異常検知の参考とする。
+</p>
+
+<hr>
+
+<h2>78. Master Diff</h2>
+
+<pre>
+New Class IDs
+0
+
+New Source Type IDs
+1
+
+New Rarity IDs
+0
+
+New Tribe IDs
+2
+
+New Card Set IDs
+1
+</pre>
+
+<div class="warning">
+
+<p>
+新しいIDを
+既存IDの連番だからという理由で自動登録しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>79. Diff Report</h2>
+
+<div class="rule">
+
+<strong>
+Draft Versionに対して
+比較対象VersionとのDiff Reportを必ず生成する。
+</strong>
+
+</div>
+
+<p>
+通常はCurrent Versionとの比較を基本とする。
+</p>
+
+<hr>
+
+<h2>80. Diff Summary</h2>
+
+<div class="example">
+
+<pre>
+Cards
+
+New         42
+Changed     18
+Unchanged 3421
+Missing      0
+
+
+Masters
+
+New Card Set    1
+New Type ID     0
+New Tribe ID    0
+New Rarity ID   0
+</pre>
+
+</div>
+
+<hr>
+
+<h2>81. Card単位Diff</h2>
+
+<pre>
+card_id
+12345678
+
+name
+No Change
+
+cost
+3 → 4
+
+skill_text
+Changed
+
+card_set_id
+No Change
+</pre>
+
+<hr>
+
+<h2>82. Diff対象</h2>
+
+<ul>
+<li>name。</li>
+<li>cost。</li>
+<li>atk。</li>
+<li>life。</li>
+<li>class。</li>
+<li>type。</li>
+<li>rarity。</li>
+<li>card_set_id。</li>
+<li>is_token。</li>
+<li>tribes。</li>
+<li>keywords。</li>
+<li>skill_text。</li>
+<li>flavour_text。</li>
+<li>image_ref。</li>
+<li>enabled。</li>
+</ul>
+
+<hr>
+
+<h2>83. Mapping変更履歴</h2>
+
+<div class="rule">
+
+<p>
+Mapping変更は
+Importer VersionまたはMapping管理Versionと紐付け、
+後から追跡可能とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>84. Mapping修正後のOld Version</h2>
+
+<div class="warning">
+
+<p>
+Mapping Ruleが後から変更されても
+既存Published Versionを再変換・上書きしない。
+</p>
+
+</div>
+
+<pre>
+Published A
+
+↓
+
+Mapping修正
+
+↓
+
+Aを書換
+
+×
+
+↓
+
+Draft Bを新規生成
+
+○
+</pre>
+
+<hr>
+
+<h2>85. Search Index生成</h2>
+
+<div class="box">
+
+<p>
+Data Validation・Diff作成後、
+Draft Versionに対応する
+Versioned Search Indexを生成する。
+</p>
+
+</div>
+
+<pre>
+Draft
+
+↓
+
+Data Validation PASS
+
+↓
+
+Diff Report
+
+↓
+
+Search Index Generation
+
+↓
+
+Search Index Validation
+</pre>
+
+<hr>
+
+<h2>86. Search Index Filename</h2>
+
+<pre>
+card-search-index-[version_code].json
+</pre>
+
+<div class="example">
+
+<pre>
+card-search-index-2026-08-01-01.json
+</pre>
+
+</div>
+
+<hr>
+
+<h2>87. Search Index項目</h2>
+
+<pre>
+card_id
+name
+class
+type
+card_set_id
+rarity
+is_token
+</pre>
+
+<hr>
+
+<h2>88. Search Index JSON</h2>
+
+<div class="example">
+
+<pre>
+{
+    "version_code": "2026-08-01-01",
+
+    "cards": [
+        {
+            "card_id": "10211110",
+            "name": "カード名",
+            "class": 1,
+            "type": 1,
+            "card_set_id": 10002,
+            "rarity": 1,
+            "is_token": false
+        }
+    ]
+}
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+Top Levelへ
+<code>data_version</code>
+という曖昧な名称を使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>89. Search Indexへ入れない情報</h2>
+
+<div class="warning">
+
+<ul>
+<li>Game Answer。</li>
+<li>Daily Answer。</li>
+<li>Challenge Answer。</li>
+<li>Battle Answer。</li>
+<li>sessionToken。</li>
+<li>reconnectToken。</li>
+<li>その他Secret。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>90. Search Index Validation</h2>
+
+<ul>
+<li>version_code一致。</li>
+<li>JSON正常。</li>
+<li>card_id重複なし。</li>
+<li>Draftのenabled Cardとの整合。</li>
+<li>必要Field存在。</li>
+<li>対象Card件数の整合。</li>
+</ul>
+
+<hr>
+
+<h2>91. Search Index生成失敗</h2>
+
+<div class="warning">
+
+<p>
+Card Dataが正常でも
+対応Search Indexを正常生成できないVersionは
+Publish不可。
+</p>
+
+</div>
+
+<hr>
+
+<h2>92. Admin Review</h2>
+
+<div class="box">
+
+<p>
+07管理画面ではDraftについて以下を確認可能にする。
+</p>
+
+</div>
+
+<ul>
+<li>version_code。</li>
+<li>Card件数。</li>
+<li>Data Validation結果。</li>
+<li>Error / Warning件数。</li>
+<li>Diff Summary。</li>
+<li>Changed Cards。</li>
+<li>Search Index状態。</li>
+<li>Importer Version。</li>
+<li>Source Hash。</li>
+<li>Source Schema Version。</li>
+</ul>
+
+<hr>
+
+<h2>93. Publish条件</h2>
+
+<div class="rule">
+
+<pre>
+Source Schema Validation
+PASS
+
+↓
+
+Importer
+PASS
+
+↓
+
+Mapping Validation
+PASS
+
+↓
+
+Draft Version
+Created
+
+↓
+
+Data Validation
+ERROR 0
+
+↓
+
+Diff Report
+Generated
+
+↓
+
+Search Index
+Generated
+
+↓
+
+Search Index Validation
+PASS
+
+↓
+
+Admin Review
+
+↓
+
+Publish可能
+</pre>
+
+</div>
+
+<hr>
+
+<h2>94. Warningがある場合</h2>
+
+<div class="notice">
+
+<p>
+Warningが存在しても
+Data Validation Errorが0件であれば、
+管理者確認後にPublish可能とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>95. Published</h2>
+
+<div class="rule">
+
+<strong>
+Published VersionはImmutable。
+</strong>
+
+</div>
+
+<div class="warning">
+
+<pre>
+Published Version
+
+↓
+
+Card直接編集
+×
+
+Importer再実行結果で上書き
+×
+
+Mapping再適用して上書き
+×
+</pre>
+
+</div>
+
+<hr>
+
+<h2>96. Published後の修正</h2>
+
+<pre>
+Published A
+
+↓
+
+問題発見
+
+↓
+
+Aは変更しない
+
+↓
+
+Source / Importer / Mapping原因確認
+
+↓
+
+Correction
+
+↓
+
+Draft B
+
+↓
+
+Validation
+
+↓
+
+Published B
+</pre>
+
+<hr>
+
+<h2>97. Importer Correction Rule</h2>
+
+<div class="box">
+
+<p>
+Official Source自体に明確な問題があり、
+Shado Guesser側で補正が必要な場合は
+Importer Correction Ruleとして管理する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+Source Archive自体を書き換えない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>98. Correction Rule追加条件</h2>
+
+<div class="rule">
+
+<p>
+公式表示・公式修正情報等により
+事実確認できる場合のみ追加する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+「AIが間違いだと思った」
+「見た感じ違う」
+だけを理由に追加しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>99. Correction Rule記録</h2>
+
+<pre>
+target_card_id
+target_field
+source_value
+normalized_value
+reason
+evidence
+introduced_importer_version
+</pre>
+
+<hr>
+
+<h2>100. CurrentとPublished</h2>
+
+<div class="rule">
+
+<p>
+PublishとCurrent変更を
+別操作として扱う。
+</p>
+
+</div>
+
+<pre>
+Draft
+
+↓
+
+Publish
+
+↓
+
+Published
+
+↓
+
+必要なTimingで
+
+Admin
+
+↓
+
+Current Switch
+</pre>
+
+<hr>
+
+<h2>101. Current変更条件</h2>
+
+<ul>
+<li>Target VersionがPublished。</li>
+<li>Data Validation済み。</li>
+<li>Search Index存在。</li>
+<li>Search Index version_code一致。</li>
+</ul>
+
+<hr>
+
+<h2>102. Current Pointer</h2>
+
+<div class="rule">
+
+<p>
+同時にCurrentとなるVersionは最大1つ。
+</p>
+
+</div>
+
+<pre>
+Published A
+
+Published B
+Current
+
+Published C
+</pre>
+
+<hr>
+
+<h2>103. Current変更後</h2>
+
+<table>
+
+<tr>
+<th>対象</th>
+<th>処理</th>
+</tr>
+
+<tr>
+<td>新規Solo</td>
+<td>New Current Version</td>
+</tr>
+
+<tr>
+<td>新規Challenge</td>
+<td>New Current Version</td>
+</tr>
+
+<tr>
+<td>新規Battle</td>
+<td>New Current Version</td>
+</tr>
+
+<tr>
+<td>開始済みSolo</td>
+<td>Old data_version_id維持</td>
+</tr>
+
+<tr>
+<td>開始済みChallenge</td>
+<td>Old data_version_id維持</td>
+</tr>
+
+<tr>
+<td>開始済みBattle</td>
+<td>Old data_version_id維持</td>
+</tr>
+
+<tr>
+<td>Current Daily</td>
+<td>Suspend</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>104. Current変更とDaily</h2>
+
+<div class="warning">
+
+<strong>
+Current Version変更時は
+現在のdaily_keyを自動Suspendする。
+</strong>
+
+</div>
+
+<pre>
+Current Change
+
+↓
+
+Current daily_key
+
+↓
+
+daily_controls
+
+status = suspended
+reason = card_update
+</pre>
+
+<hr>
+
+<h2>105. Rollback</h2>
+
+<div class="rule">
+
+<p>
+RollbackもCurrent変更である。
+</p>
+
+</div>
+
+<pre>
+Current B
+
+↓
+
+Rollback to A
+
+↓
+
+Current変更成立
+
+↓
+
+Current Daily Suspend
+</pre>
+
+<hr>
+
+<h2>106. Publishだけの場合</h2>
+
+<div class="rule">
+
+<pre>
+Current = A
+
+Version B
+
+Draft
+↓
+
+Published
+
+↓
+
+CurrentはAのまま
+
+↓
+
+Daily継続
+</pre>
+
+</div>
+
+<p>
+PublishだけではDailyをSuspendしない。
+</p>
+
+<hr>
+
+<h2>107. Daily翌日</h2>
+
+<pre>
+Current Change
+
+↓
+
+Current Daily
+suspended
+
+↓
+
+同じdaily_key中
+
+再開なし
+
+↓
+
+Next JST 05:00
+
+↓
+
+New daily_key
+
+↓
+
+New CurrentでDaily生成可能
+</pre>
+
+<hr>
+
+<h2>108. Current変更の監査</h2>
+
+<div class="rule">
+
+<p>
+Current変更およびDaily Suspendは
+07の
+<code>admin_audit_logs</code>
+へ記録する。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+Current変更・Current Daily Suspend・Audit Logは、
+可能な範囲で一体的に成立する処理とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>109. Import失敗</h2>
+
+<div class="rule">
+
+<strong>
+New Import失敗はCurrentへ影響させない。
+</strong>
+
+</div>
+
+<pre>
+New Source
+
+↓
+
+Import Error
+
+↓
+
+Current
+No Change
+
+↓
+
+Existing Service
+Continue
+</pre>
+
+<hr>
+
+<h2>110. Data Validation失敗</h2>
+
+<div class="rule">
+
+<p>
+DraftをPublishedへ進めない。
+</p>
+
+<p>
+Current Versionは変更しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>111. Search Index失敗</h2>
+
+<div class="rule">
+
+<p>
+DraftをPublishedへ進めない。
+</p>
+
+<p>
+既存Current / Search Indexへ影響させない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>112. Partial Update禁止</h2>
+
+<div class="warning">
+
+<pre>
+Current Versionへ
+
+Card A直接更新
+Card B直接更新
+Card C直接更新
+
+×
+
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+Full Snapshotを完成させ、
+Version単位でCurrentを切り替える。
+</p>
+
+</div>
+
+<hr>
+
+<h2>113. Source取得失敗</h2>
+
+<div class="warning">
+
+<p>
+通信失敗、
+Response欠落、
+JSON破損等の場合は
+Importを開始しない、
+またはImport Errorとして停止する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>114. JSON Parse Error</h2>
+
+<pre>
+Invalid JSON
+
+↓
+
+SOURCE_JSON_INVALID
+
+↓
+
+Import Stop
+</pre>
+
+<hr>
+
+<h2>115. Import Error Report</h2>
+
+<div class="example">
+
+<pre>
+ERROR
+
+UNKNOWN_TRIBE_ID
+
+tribe_id
+27
+
+Affected Cards
+14
+
+Example Card IDs
+12345678
+12345679
+12345680
+</pre>
+
+</div>
+
+<hr>
+
+<h2>116. Error Reportの秘密情報</h2>
+
+<div class="warning">
+
+<p>
+Import / Validation Reportへ以下を記録しない。
+</p>
+
+<ul>
+<li>Cookie。</li>
+<li>Authorization。</li>
+<li>CSRF Token。</li>
+<li>Session Secret。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>117. Error Code例</h2>
+
+<pre>
+SOURCE_JSON_INVALID
+
+SOURCE_SCHEMA_MISMATCH
+
+UNKNOWN_CLASS_ID
+
+UNKNOWN_TYPE_ID
+
+UNKNOWN_RARITY_ID
+
+UNKNOWN_TRIBE_ID
+
+UNKNOWN_CARD_SET_ID
+
+UNKNOWN_KEYWORD
+
+DUPLICATE_CARD_ID
+
+MISSING_CARD_NAME
+
+INVALID_COST
+
+MISSING_FOLLOWER_STAT
+
+INVALID_IMAGE_REF
+
+MISSING_CARD_FROM_SOURCE
+
+SEARCH_INDEX_GENERATION_FAILED
+
+SEARCH_INDEX_VERSION_MISMATCH
+</pre>
+
+<hr>
+
+<h2>118. Validation Report</h2>
+
+<div class="example">
+
+<pre>
+Validation Result
+
+ERROR
+0
+
+WARNING
+12
+
+Cards
+3542
+</pre>
+
+</div>
+
+<hr>
+
+<h2>119. Source ArchiveとOld Version</h2>
+
+<div class="rule">
+
+<p>
+Published Versionから
+生成元Source Archiveを追跡可能にする。
+</p>
+
+</div>
+
+<pre>
+data_version_id
+
+↓
+
+raw_data_hash
+
+↓
+
+Source Archive
+
+↓
+
+importer_version
+</pre>
+
+<hr>
+
+<h2>120. Old Published Version</h2>
+
+<div class="rule">
+
+<p>
+初期版では
+Old Published Versionを自動削除しない。
+</p>
+
+</div>
+
+<p>
+進行中GameがOld Versionを参照する可能性があるためである。
+</p>
+
+<hr>
+
+<h2>121. Old Search Index</h2>
+
+<div class="rule">
+
+<p>
+Old Version用Search Indexも
+初期版では自動削除しない。
+</p>
+
+</div>
+
+<p>
+Old data_version_idで進行するGameが
+対応version_codeのIndexを取得できるようにする。
+</p>
+
+<hr>
+
+<h2>122. Source Archive公開禁止</h2>
+
+<div class="warning">
+
+<strong>
+Source ArchiveをPublic Static Fileとして配信しない。
+</strong>
+
+</div>
+
+<p>
+一般Userへ必要なのは
+Shado Guesser用に生成したSearch Index等の公開Dataのみ。
+</p>
+
+<hr>
+
+<h2>123. Source URL</h2>
+
+<div class="rule">
+
+<p>
+可能な場合、
+取得元Official URL・取得経路を
+Source Manifestへ記録する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+URLへ一時TokenやSession情報が含まれる場合は
+秘密部分を保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>124. Source取得時の安全性</h2>
+
+<div class="rule">
+
+<p>
+必要な公開Card Dataのみを対象とし、
+個人の認証情報を
+Card Update Pipelineへ持ち込まない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>125. 標準更新フロー</h2>
+
+<div class="box">
+
+<pre>
+STEP 1
+Official Structured Source Data取得
+
+
+STEP 2
+不要な認証・Session領域除外
+
+
+STEP 3
+Sanitized Source Archive保存
+
+
+STEP 4
+raw_data_hash生成
+
+
+STEP 5
+Source Schema Validation
+
+
+STEP 6
+Deterministic Importer実行
+
+
+STEP 7
+Mapping Validation
+
+
+STEP 8
+Normalized Candidate Snapshot生成
+
+
+STEP 9
+Draft Version生成
+
+
+STEP 10
+Data Validation
+
+
+STEP 11
+Previous / Current VersionとのDiff生成
+
+
+STEP 12
+Search Index生成
+
+
+STEP 13
+Search Index Validation
+
+
+STEP 14
+07 Admin画面でReview
+
+
+STEP 15
+Published
+
+
+STEP 16
+必要なTimingでCurrent変更
+
+
+STEP 17
+Current Daily Suspend
+
+
+STEP 18
+New GameがNew Currentを使用
+</pre>
+
+</div>
+
+<hr>
+
+<h2>126. Draft作成順序の重要性</h2>
+
+<div class="warning">
+
+<p>
+以下の順序にはしない。
+</p>
+
+<pre>
+Normalized Data
+
+↓
+
+Full Data Validation
+
+↓
+
+Diff
+
+↓
+
+Draft
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+正式な順序は以下。
+</p>
+
+<pre>
+Normalized Candidate
+
+↓
+
+Draft
+
+↓
+
+Data Validation
+
+↓
+
+Diff
+</pre>
+
+</div>
+
+<p>
+これにより、
+07管理画面で確認する対象が
+明確なDraft Versionとなる。
+</p>
+
+<hr>
+
+<h2>127. Pre-Draft Failure</h2>
+
+<table>
+
+<tr>
+<th>Failure</th>
+<th>Draft</th>
+</tr>
+
+<tr>
+<td>Source JSON Parse不可</td>
+<td>作成しない</td>
+</tr>
+
+<tr>
+<td>Source Schema不一致</td>
+<td>作成しない</td>
+</tr>
+
+<tr>
+<td>Importer実行不能</td>
+<td>作成しない</td>
+</tr>
+
+<tr>
+<td>Mapping不能</td>
+<td>作成しない</td>
+</tr>
+
+<tr>
+<td>Normalized Candidate生成成功</td>
+<td>Draft作成</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>128. Post-Draft Failure</h2>
+
+<table>
+
+<tr>
+<th>Failure</th>
+<th>処理</th>
+</tr>
+
+<tr>
+<td>Data Validation Error</td>
+<td>DraftのままPublish禁止</td>
+</tr>
+
+<tr>
+<td>Diff異常</td>
+<td>Draftのまま確認</td>
+</tr>
+
+<tr>
+<td>Search Index生成失敗</td>
+<td>DraftのままPublish禁止</td>
+</tr>
+
+<tr>
+<td>Search Index Validation失敗</td>
+<td>DraftのままPublish禁止</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>129. Draftを残す意味</h2>
+
+<div class="box">
+
+<p>
+Post-Draft Validationで問題が見つかった場合、
+そのDraftとReportを管理者が確認できる。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+ただしErrorのあるDraftを
+Gameへ提供してはいけない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>130. Data Version監査可能性</h2>
+
+<pre>
+どのSourceか
+
+どのRaw Hashか
+
+どのSource Schemaか
+
+どのImporter Versionか
+
+どのMappingか
+
+いつImportしたか
+
+Data Validation結果
+
+Diff結果
+
+Search Index結果
+
+いつPublishedしたか
+
+いつCurrentになったか
+</pre>
+
+<hr>
+
+<h2>131. 手作業で行う内容</h2>
+
+<ul>
+<li>Official Source取得。</li>
+<li>Source内容確認。</li>
+<li>Unknown MappingのOfficial情報確認。</li>
+<li>Importer実行。</li>
+<li>Validation確認。</li>
+<li>Diff確認。</li>
+<li>Admin画面からPublish。</li>
+<li>Admin画面からCurrent変更。</li>
+</ul>
+
+<hr>
+
+<h2>132. Card単位の直接修正禁止</h2>
+
+<div class="warning">
+
+<pre>
+Normalized Cardを直接編集
+
+×
+
+</pre>
+
+</div>
+
+<pre>
+Error発見
+
+↓
+
+Source？
+Mapping？
+Importer？
+
+↓
+
+原因修正
+
+↓
+
+再Import
+
+↓
+
+New Draft
+</pre>
+
+<hr>
+
+<h2>133. Currentは失敗処理の影響を受けない</h2>
+
+<div class="rule">
+
+<p>
+以下の失敗ではCurrentを変更しない。
+</p>
+
+<ul>
+<li>Source取得Failure。</li>
+<li>Schema Validation Failure。</li>
+<li>Import Failure。</li>
+<li>Mapping Failure。</li>
+<li>Data Validation Failure。</li>
+<li>Search Index Failure。</li>
+<li>Admin Review取消。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>134. Current変更とDaily停止の原則</h2>
+
+<div class="rule">
+
+<pre>
+Publish
+
+≠
+
+Current Switch
+
+
+Current Switch
+
+=
+
+Current Daily Suspend発生
+</pre>
+
+</div>
+
+<hr>
+
+<h2>135. AdminとImporterの責務</h2>
+
+<table>
+
+<tr>
+<th>処理</th>
+<th>担当</th>
+</tr>
+
+<tr>
+<td>Source Schema Check</td>
+<td>Importer Pipeline</td>
+</tr>
+
+<tr>
+<td>Mapping Check</td>
+<td>Importer Pipeline</td>
+</tr>
+
+<tr>
+<td>Normalized Candidate生成</td>
+<td>Importer Pipeline</td>
+</tr>
+
+<tr>
+<td>Draft生成</td>
+<td>Importer Pipeline</td>
+</tr>
+
+<tr>
+<td>Data Validation</td>
+<td>Validation Pipeline</td>
+</tr>
+
+<tr>
+<td>Diff</td>
+<td>Update Pipeline</td>
+</tr>
+
+<tr>
+<td>Search Index生成</td>
+<td>Update Pipeline</td>
+</tr>
+
+<tr>
+<td>Review</td>
+<td>Admin</td>
+</tr>
+
+<tr>
+<td>Publish</td>
+<td>Admin</td>
+</tr>
+
+<tr>
+<td>Current Switch</td>
+<td>Admin</td>
+</tr>
+
+<tr>
+<td>Daily Suspend</td>
+<td>System</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>136. 06との関係</h2>
+
+<div class="box">
+
+<p>
+08でCurrent Versionが変更された後、
+新規GameへのVersion適用および
+進行中GameのVersion固定は06を正とする。
+</p>
+
+</div>
+
+<pre>
+08
+
+Current Switch
+
+↓
+
+06
+
+New Game
+→ New data_version_id
+
+Existing Game
+→ Existing data_version_id
+</pre>
+
+<hr>
+
+<h2>137. 07との関係</h2>
+
+<div class="box">
+
+<p>
+Draft Review・Publish・Current Switch・Daily Suspend等の
+Admin操作は07を正とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>138. 04との関係</h2>
+
+<div class="box">
+
+<p>
+Normalized Card Schema、
+D1 Table、
+data_versions、
+Card Masterの正式構造は04を正とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>139. 05-09との関係</h2>
+
+<div class="box">
+
+<p>
+生成したSearch Indexは
+05-09のBrowser Suggestionで使用する。
+</p>
+
+</div>
+
+<pre>
+version_code
+
+2026-08-01-01
+
+↓
+
+card-search-index-2026-08-01-01.json
+</pre>
+
+<hr>
+
+<h2>140. Source Mapping調査項目</h2>
+
+<div class="notice">
+
+<p>
+以下は「仕様未決定」ではなく、
+Official Sourceを確認して確定する
+Mapping調査事項である。
+</p>
+
+</div>
+
+<ul>
+<li>Source type IDの正式意味。</li>
+<li>Source rarity IDの正式意味。</li>
+<li>Source tribe IDの正式意味。</li>
+<li>「全て」に相当するSource表現。</li>
+<li>各card_set_idの正式名称。</li>
+<li>各Card Setのrelease_order。</li>
+<li>Card Image IDとURLの対応。</li>
+<li>Structured Keyword Dataの有無。</li>
+<li>Source Schemaの正式な安定範囲。</li>
+</ul>
+
+<div class="rule">
+
+<p>
+未知のままなら
+推測してImportせずErrorとする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>141. 設計未決定とSource未知値</h2>
+
+<pre>
+Design Rule
+
+→ この設計書で決定
+
+
+Official IDの意味
+
+→ Source調査で確定
+
+
+意味不明
+
+→ 推測せずValidation / Import Error
+</pre>
+
+<hr>
+
+<h2>142. 正式Update Pipeline</h2>
+
+<div class="rule">
+
+<strong>
+正式な更新経路は以下へ統一する。
+</strong>
+
+</div>
+
+<pre>
+Official Structured Source Data
+
+↓
+
+Sanitized Source Archive
+
+↓
+
+Source Schema Validation
+
+↓
+
+Deterministic Importer
+
+↓
+
+Explicit Mapping / Mapping Validation
+
+↓
+
+Normalized Candidate Full Snapshot
+
+↓
+
+Draft Version
+
+↓
+
+Data Validation
+
+↓
+
+Diff Report
+
+↓
+
+Versioned Search Index
+
+↓
+
+Search Index Validation
+
+↓
+
+Admin Review
+
+↓
+
+Published
+
+↓
+
+Admin Current Switch
+
+↓
+
+Current Daily Suspend
+
+↓
+
+New Games Use New Version
+</pre>
+
+<hr>
+
+<h2>143. 08で確定した事項</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>確定仕様</th>
+</tr>
+
+<tr>
+<td>Formal Source</td>
+<td>Official Structured Source Data</td>
+</tr>
+
+<tr>
+<td>AI目視転記</td>
+<td>Formal Sourceに使用しない</td>
+</tr>
+
+<tr>
+<td>HTMLから全Card再構成</td>
+<td>Formal Sourceに使用しない</td>
+</tr>
+
+<tr>
+<td>Source Archive</td>
+<td>Sanitize後に非公開保存</td>
+</tr>
+
+<tr>
+<td>Authentication Data</td>
+<td>Archiveから除外</td>
+</tr>
+
+<tr>
+<td>Source値</td>
+<td>原則変更せず保存</td>
+</tr>
+
+<tr>
+<td>raw_data_hash</td>
+<td>保存</td>
+</tr>
+
+<tr>
+<td>importer_version</td>
+<td>保存</td>
+</tr>
+
+<tr>
+<td>source_schema_version</td>
+<td>保存</td>
+</tr>
+
+<tr>
+<td>Importer</td>
+<td>Deterministic</td>
+</tr>
+
+<tr>
+<td>未知ID</td>
+<td>推測禁止</td>
+</tr>
+
+<tr>
+<td>Schema Change</td>
+<td>自動読み替え禁止</td>
+</tr>
+
+<tr>
+<td>Source type</td>
+<td>Explicit Mapping</td>
+</tr>
+
+<tr>
+<td>App type</td>
+<td>1 / 2 / 3</td>
+</tr>
+
+<tr>
+<td>Token</td>
+<td>is_token</td>
+</tr>
+
+<tr>
+<td>Basic</td>
+<td>Non-Token + card_set_id 10000</td>
+</tr>
+
+<tr>
+<td>starter_card</td>
+<td>starter_set_idへ分離</td>
+</tr>
+
+<tr>
+<td>Non-Follower atk / life</td>
+<td>NULL</td>
+</tr>
+
+<tr>
+<td>Follower Stat欠損</td>
+<td>Validation Error</td>
+</tr>
+
+<tr>
+<td>Keyword</td>
+<td>Structured DataまたはOfficial Markup</td>
+</tr>
+
+<tr>
+<td>Image</td>
+<td>image_ref</td>
+</tr>
+
+<tr>
+<td>Version方式</td>
+<td>Full Snapshot</td>
+</tr>
+
+<tr>
+<td>Internal Version</td>
+<td>data_version_id</td>
+</tr>
+
+<tr>
+<td>Display Version</td>
+<td>version_code</td>
+</tr>
+
+<tr>
+<td>Version Code</td>
+<td>YYYY-MM-DD-serial</td>
+</tr>
+
+<tr>
+<td>Pre-Draft Check</td>
+<td>Schema / Import / Mapping</td>
+</tr>
+
+<tr>
+<td>Draft生成</td>
+<td>Normalized Candidate生成後</td>
+</tr>
+
+<tr>
+<td>Full Data Validation</td>
+<td>Draft生成後</td>
+</tr>
+
+<tr>
+<td>Diff</td>
+<td>Draft生成後</td>
+</tr>
+
+<tr>
+<td>Search Index</td>
+<td>Draftから生成</td>
+</tr>
+
+<tr>
+<td>Search Index Filename</td>
+<td>card-search-index-[version_code].json</td>
+</tr>
+
+<tr>
+<td>Search Index Version Field</td>
+<td>version_code</td>
+</tr>
+
+<tr>
+<td>Validation Error</td>
+<td>Publish禁止</td>
+</tr>
+
+<tr>
+<td>Warning</td>
+<td>Admin Review後Publish可能</td>
+</tr>
+
+<tr>
+<td>Draft</td>
+<td>Gameで使用しない</td>
+</tr>
+
+<tr>
+<td>Published</td>
+<td>Immutable</td>
+</tr>
+
+<tr>
+<td>Publish</td>
+<td>Currentとは別操作</td>
+</tr>
+
+<tr>
+<td>Current</td>
+<td>Publishedから1つ</td>
+</tr>
+
+<tr>
+<td>Current Change</td>
+<td>Current Daily Suspend</td>
+</tr>
+
+<tr>
+<td>Rollback</td>
+<td>Current Daily Suspend</td>
+</tr>
+
+<tr>
+<td>Publish Only</td>
+<td>Daily継続</td>
+</tr>
+
+<tr>
+<td>Import Failure</td>
+<td>Currentへ影響なし</td>
+</tr>
+
+<tr>
+<td>Validation Failure</td>
+<td>Currentへ影響なし</td>
+</tr>
+
+<tr>
+<td>Search Index Failure</td>
+<td>Currentへ影響なし</td>
+</tr>
+
+<tr>
+<td>Partial Current Update</td>
+<td>禁止</td>
+</tr>
+
+<tr>
+<td>Old Published Version</td>
+<td>初期版では自動削除なし</td>
+</tr>
+
+<tr>
+<td>Old Search Index</td>
+<td>初期版では自動削除なし</td>
+</tr>
+
+<tr>
+<td>Source Correction</td>
+<td>Traceable Importer Rule</td>
+</tr>
+
+<tr>
+<td>Auto Fetch</td>
+<td>将来可。ただしAuto Currentなし</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>144. 実装時確認事項</h2>
+
+<div class="notice">
+
+<ul>
+<li>Official Structured Sourceの具体的取得方法。</li>
+<li>Source Schemaの安定範囲。</li>
+<li>Source type Mapping。</li>
+<li>Source rarity Mapping。</li>
+<li>Source tribe Mapping。</li>
+<li>Card Set Name Mapping。</li>
+<li>release_order。</li>
+<li>「全て」のSource表現。</li>
+<li>Structured Keyword Data有無。</li>
+<li>Card Image URL / Hash変換Rule。</li>
+<li>Source Archiveの物理Storage。</li>
+<li>Hash Algorithm。</li>
+<li>Importer / Mapping Version管理方法。</li>
+<li>Draft生成Transaction。</li>
+<li>Validation Report保存形式。</li>
+<li>Diff Report保存形式。</li>
+<li>Search Index公開先。</li>
+<li>Current Pointerの具体的DB制約。</li>
+<li>Current Switch + Daily Suspend + AuditのTransaction構成。</li>
+</ul>
+
+<p>
+これらは本書で確定した
+Update Pipelineの基本順序を変更せず実装時に決定する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>145. 最終方針</h2>
+
+<div class="rule">
+
+<strong>
+「Sourceを残す・変換を再現できる・Draftで検証する・Publishedを壊さない」
+</strong>
+
+</div>
+
+<pre>
+Source
+
+↓
+
+Reproducible Import
+
+↓
+
+Draft
+
+↓
+
+Validate
+
+↓
+
+Review
+
+↓
+
+Published
+
+↓
+
+Current
+</pre>
+
+<p>
+この構造によって、
+カード追加・能力修正・新Pack追加・Mapping変更等が発生しても、
+既存Gameを破壊せず
+追跡可能なVersion単位で安全に更新する。
+</p>
+
+<hr>
+
+<p class="small">
+Shado Guesser 基本設計書<br>
+08 データ取得・更新手順<br><br>
+©Shado Guesser
+</p>
+
+</body>
+</html>

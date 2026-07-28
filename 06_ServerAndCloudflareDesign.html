@@ -1,0 +1,6231 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Shado Guesser 基本設計書 - 06 サーバー・Cloudflare設計</title>
+
+<style>
+
+body{
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    color:#222;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+}
+
+h1{
+    border-bottom:4px solid #3f51b5;
+    padding-bottom:10px;
+}
+
+h2{
+    margin-top:45px;
+    border-left:8px solid #3f51b5;
+    padding-left:12px;
+}
+
+h3{
+    margin-top:30px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th,
+td{
+    border:1px solid #cccccc;
+    padding:10px;
+    vertical-align:top;
+}
+
+th{
+    background:#3f51b5;
+    color:white;
+}
+
+.box{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+}
+
+.notice{
+    background:#fff8e1;
+    border-left:6px solid #ffc107;
+    padding:15px;
+    margin-top:20px;
+}
+
+.rule{
+    background:#e8eaf6;
+    border-left:6px solid #3f51b5;
+    padding:15px;
+    margin-top:20px;
+}
+
+.warning{
+    background:#ffebee;
+    border-left:6px solid #d32f2f;
+    padding:15px;
+    margin-top:20px;
+}
+
+.example{
+    background:#e8f5e9;
+    border-left:6px solid #4caf50;
+    padding:15px;
+    margin-top:20px;
+}
+
+pre{
+    background:#222;
+    color:#f5f5f5;
+    padding:20px;
+    border-radius:8px;
+    overflow:auto;
+    line-height:1.6;
+}
+
+code{
+    background:#eeeeee;
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.small{
+    color:#777;
+    font-size:0.9em;
+}
+
+@media(max-width:700px){
+
+    body{
+        padding:18px;
+    }
+
+    table{
+        font-size:0.88em;
+    }
+
+    th,
+    td{
+        padding:7px;
+    }
+
+    pre{
+        padding:12px;
+        font-size:0.82em;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Shado Guesser 基本設計書</h1>
+
+<p>
+<strong>06：サーバー・Cloudflare設計</strong>
+</p>
+
+<p>
+本設計書では、
+Shado GuesserのCloudflare環境における
+サーバー構成、
+API、
+D1、
+Durable Objects、
+WebSocket、
+ゲーム状態管理、
+Daily生成・停止、
+回答判定、
+再接続、
+タイムアウト、
+セッション管理、
+冪等処理、
+自動削除等を定義する。
+</p>
+
+<p>
+ゲームの正式な状態・正解・回答回数・判定・手番・deadline・勝敗等は
+<strong>サーバー側をSource of Truth</strong>
+とする。
+</p>
+
+<hr>
+
+<h2>1. 基本方針</h2>
+
+<div class="rule">
+
+<ul>
+<li>Frontend：Cloudflare Pages。</li>
+<li>API入口：Cloudflare Workers。</li>
+<li>永続Data：Cloudflare D1。</li>
+<li>進行中Game State：Durable Objects。</li>
+<li>2人モードのRealtime通信：WebSocket。</li>
+<li>WebSocketはHibernationを利用可能な構成。</li>
+<li>正解Cardは通常Game EndまでServer側に保持。</li>
+<li>正式なGuess判定はServer側。</li>
+<li>Client Stateを正式Stateとして信用しない。</li>
+<li>初期版では常時起動VPS / Node.js Serverを必須としない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>2. 全体構成</h2>
+
+<pre>
+                         ┌──────────────────────────┐
+                         │         Browser          │
+                         │                          │
+                         │ HTML / CSS / JavaScript  │
+                         │ Local Card Search        │
+                         │ Local Countdown          │
+                         └────────────┬─────────────┘
+                                      │
+                     ┌────────────────┴─────────────────┐
+                     │                                  │
+                     ▼                                  ▼
+          ┌─────────────────────┐          ┌─────────────────────┐
+          │ Cloudflare Pages    │          │ Cloudflare Workers  │
+          │                     │          │                     │
+          │ HTML / CSS / JS     │          │ API Gateway         │
+          │ Search Index JSON   │          │ Validation          │
+          │ Public Static Data  │          │ Routing             │
+          └─────────────────────┘          └──────────┬──────────┘
+                                                      │
+                            ┌─────────────────────────┴────────────────────┐
+                            │                                              │
+                            ▼                                              ▼
+                  ┌─────────────────────┐                       ┌─────────────────────┐
+                  │ Cloudflare D1       │                       │ Durable Objects     │
+                  │                     │                       │                     │
+                  │ Card Masters        │                       │ Game State          │
+                  │ Data Versions       │                       │ Answer              │
+                  │ Daily Config        │                       │ History             │
+                  │ Daily Controls      │                       │ Hint State          │
+                  │ Operator Settings   │                       │ Turn / READY        │
+                  │ Audit Logs          │                       │ Deadline            │
+                  │ Error Logs          │                       │ Reconnect           │
+                  └─────────────────────┘                       └──────────┬──────────┘
+                                                                         │
+                                                                         ▼
+                                                               WebSocket Hibernation
+</pre>
+
+<hr>
+
+<h2>3. Cloudflare Pages</h2>
+
+<div class="box">
+
+<ul>
+<li>HTML配信。</li>
+<li>CSS配信。</li>
+<li>JavaScript配信。</li>
+<li>Version別Search Index配信。</li>
+<li>公開Static Asset配信。</li>
+</ul>
+
+</div>
+
+<div class="rule">
+
+<p>
+Card Name Suggestionは
+Pagesから取得したSearch Indexを使用して
+Browser内で処理する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>4. Cloudflare Workers</h2>
+
+<div class="box">
+
+<ul>
+<li>Public API入口。</li>
+<li>Request形式検証。</li>
+<li>Token認証。</li>
+<li>D1 Access。</li>
+<li>Current Data Version取得。</li>
+<li>回答対象範囲生成。</li>
+<li>Game作成。</li>
+<li>Daily Config取得・作成。</li>
+<li>Daily Control確認。</li>
+<li>Durable Object Routing。</li>
+<li>WebSocket Upgrade Routing。</li>
+<li>安全なError Response生成。</li>
+</ul>
+
+</div>
+
+<div class="warning">
+
+<p>
+Workers自身のJavaScript Memoryへ
+進行中Gameの正式Stateを保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>5. D1の責務</h2>
+
+<div class="box">
+
+<p>
+D1はGame Sessionそのものではなく、
+永続的に保持するMaster・Version・運営Dataを担当する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>Table</th>
+<th>用途</th>
+</tr>
+
+<tr>
+<td><code>data_versions</code></td>
+<td>Data Version管理</td>
+</tr>
+
+<tr>
+<td><code>cards</code></td>
+<td>Card Master</td>
+</tr>
+
+<tr>
+<td><code>card_sets</code></td>
+<td>Card Pack Master</td>
+</tr>
+
+<tr>
+<td><code>classes</code></td>
+<td>Class Master</td>
+</tr>
+
+<tr>
+<td><code>types</code></td>
+<td>分類Master</td>
+</tr>
+
+<tr>
+<td><code>rarities</code></td>
+<td>Rarity Master</td>
+</tr>
+
+<tr>
+<td><code>tribes</code></td>
+<td>タイプMaster</td>
+</tr>
+
+<tr>
+<td><code>card_tribes</code></td>
+<td>Cardとタイプの関連</td>
+</tr>
+
+<tr>
+<td><code>keywords</code></td>
+<td>Keyword Master</td>
+</tr>
+
+<tr>
+<td><code>card_keywords</code></td>
+<td>CardとKeywordの関連</td>
+</tr>
+
+<tr>
+<td><code>daily_configs</code></td>
+<td>daily_keyごとの共通Daily設定</td>
+</tr>
+
+<tr>
+<td><code>daily_controls</code></td>
+<td>Daily提供状態・停止状態</td>
+</tr>
+
+<tr>
+<td><code>error_logs</code></td>
+<td>Error Log</td>
+</tr>
+
+<tr>
+<td><code>operator_settings</code></td>
+<td>運営設定</td>
+</tr>
+
+<tr>
+<td><code>admin_audit_logs</code></td>
+<td>管理操作Audit Log</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+Player個人戦績・Ranking等は
+初期版ではD1へ永続保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>6. Durable Objects</h2>
+
+<div class="box">
+
+<p>
+すべての進行中Game Sessionは
+Durable Objectsで管理する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>Mode</th>
+<th>Durable Object</th>
+</tr>
+
+<tr>
+<td>Solo</td>
+<td><code>GameSessionDO</code></td>
+</tr>
+
+<tr>
+<td>Daily</td>
+<td><code>GameSessionDO</code></td>
+</tr>
+
+<tr>
+<td>2人出題</td>
+<td><code>ChallengeGameDO</code></td>
+</tr>
+
+<tr>
+<td>Battle</td>
+<td><code>BattleRoomDO</code></td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<strong>
+Game Stateは全モードでDurable ObjectsをSource of Truthとする。
+</strong>
+
+</div>
+
+<hr>
+
+<h2>7. DOに保持する主なState</h2>
+
+<table>
+
+<tr>
+<th>State</th>
+<th>保存</th>
+</tr>
+
+<tr>
+<td>Game Mode</td>
+<td>○</td>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>○</td>
+</tr>
+
+<tr>
+<td><code>version_code</code></td>
+<td>必要に応じて保持可能</td>
+</tr>
+
+<tr>
+<td>回答範囲</td>
+<td>○</td>
+</tr>
+
+<tr>
+<td>Answer Card ID</td>
+<td>○</td>
+</tr>
+
+<tr>
+<td>History</td>
+<td>○</td>
+</tr>
+
+<tr>
+<td>Guess Count</td>
+<td>○</td>
+</tr>
+
+<tr>
+<td>Used Hints</td>
+<td>○</td>
+</tr>
+
+<tr>
+<td>Game Status</td>
+<td>○</td>
+</tr>
+
+<tr>
+<td>End Reason</td>
+<td>必要時</td>
+</tr>
+
+<tr>
+<td>requestId結果</td>
+<td>○</td>
+</tr>
+
+<tr>
+<td>stateVersion</td>
+<td>○</td>
+</tr>
+
+<tr>
+<td>Player State</td>
+<td>2人Mode</td>
+</tr>
+
+<tr>
+<td>READY</td>
+<td>Battle</td>
+</tr>
+
+<tr>
+<td>Current Turn</td>
+<td>Battle</td>
+</tr>
+
+<tr>
+<td>Deadline</td>
+<td>Battle</td>
+</tr>
+
+<tr>
+<td>Reconnect State</td>
+<td>2人Mode</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>8. Durable Object Storage</h2>
+
+<div class="box">
+
+<p>
+新規DOでは
+SQLite-backed Durable Object Storageを基本構成とする。
+</p>
+
+<p>
+Game StateはJavaScript Memoryだけではなく
+DO Storageへ保存する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+DOが休止・再起動・Hibernation復帰しても
+StorageからGame Stateを復元可能とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>9. Memory Cache</h2>
+
+<div class="rule">
+
+<p>
+DO内部で一時Cacheを使用してよい。
+</p>
+
+<p>
+ただしGame継続に必要な正式Stateを
+Memoryだけへ保存しない。
+</p>
+
+</div>
+
+<div class="warning">
+
+<pre>
+let answerCardId;
+let history = [];
+
+だけでGameを管理
+
+×
+
+DO Storageへ正式保存
+
+○
+</pre>
+
+</div>
+
+<hr>
+
+<h2>10. Source of Truth</h2>
+
+<table>
+
+<tr>
+<th>情報</th>
+<th>正式な情報源</th>
+</tr>
+
+<tr>
+<td>Card Master</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>Published Data Version</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>Current Version</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>Daily Config</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>Daily提供状態</td>
+<td>D1 daily_controls</td>
+</tr>
+
+<tr>
+<td>進行中Game</td>
+<td>Durable Object</td>
+</tr>
+
+<tr>
+<td>正解</td>
+<td>DO / Daily Config</td>
+</tr>
+
+<tr>
+<td>Guess Count</td>
+<td>DO</td>
+</tr>
+
+<tr>
+<td>Judgement</td>
+<td>Server</td>
+</tr>
+
+<tr>
+<td>Battle Turn</td>
+<td>BattleRoomDO</td>
+</tr>
+
+<tr>
+<td>Battle Deadline</td>
+<td>BattleRoomDO</td>
+</tr>
+
+<tr>
+<td>Browser Countdown</td>
+<td>表示専用</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>11. Data Versionの名称</h2>
+
+<div class="box">
+
+<p>
+Versionを指す名称は明確に分離する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>名称</th>
+<th>意味</th>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>D1内部の不変Primary Key。Server / DO内部参照に使用</td>
+</tr>
+
+<tr>
+<td><code>version_code</code></td>
+<td>人間・Client向けVersion Code。例：2026-07-28-01</td>
+</tr>
+
+</table>
+
+<div class="warning">
+
+<p>
+<code>dataVersion</code>
+という曖昧な名称は新規API・Stateでは使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>12. Game Version固定</h2>
+
+<pre>
+Game Create
+
+↓
+
+D1 Current Version取得
+
+↓
+
+data_version_id
+version_code
+確定
+
+↓
+
+DOへ保存
+
+↓
+
+Game終了まで固定
+</pre>
+
+<div class="rule">
+
+<p>
+Current Versionが後から変更されても、
+通常の開始済みGameの
+<code>data_version_id</code>
+は変更しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>13. Current変更の通常Gameへの影響</h2>
+
+<table>
+
+<tr>
+<th>Mode</th>
+<th>Current変更</th>
+</tr>
+
+<tr>
+<td>Solo</td>
+<td>開始済みGameは旧Versionで継続</td>
+</tr>
+
+<tr>
+<td>2人出題</td>
+<td>開始済みGameは旧Versionで継続</td>
+</tr>
+
+<tr>
+<td>Battle</td>
+<td>開始済みGameは旧Versionで継続</td>
+</tr>
+
+<tr>
+<td>Daily</td>
+<td>当日のDailyをSuspendする</td>
+</tr>
+
+</table>
+
+<div class="warning">
+
+<p>
+DailyだけはCurrent変更時に
+専用停止ルールが適用される。
+</p>
+
+</div>
+
+<hr>
+
+<h2>14. 回答対象Cardの共通条件</h2>
+
+<pre>
+cards.data_version_id
+=
+Game.data_version_id
+
+AND
+
+enabled = true
+
+AND
+
+Mode固有Range
+</pre>
+
+<div class="rule">
+
+<p>
+最終集合は
+ユニークな
+<code>card_id</code>
+集合とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>15. Rotation</h2>
+
+<pre>
+Basic
+
++
+
+release_orderが新しい
+通常Pack 6個
+
+↓
+
+Token除外
+</pre>
+
+<div class="rule">
+
+<p>
+Card Set IDの数値から
+「最新6Pack」を推測しない。
+</p>
+
+<p>
+<code>release_order</code>
+を使用する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>16. Unlimited</h2>
+
+<pre>
+Basic
+
++
+
+すべての通常Published Pack
+
+↓
+
+Token除外
+</pre>
+
+<hr>
+
+<h2>17. All Cards</h2>
+
+<pre>
+Unlimited
+
++
+
+Token
+</pre>
+
+<hr>
+
+<h2>18. Custom通常Card</h2>
+
+<pre>
+is_token = false
+
+AND
+
+Class Filter
+
+AND
+
+Pack Filter
+
+AND
+
+Rarity Filter
+
+AND
+
+Classification Filter
+</pre>
+
+<p>
+同一カテゴリ内はOR、
+カテゴリ間はANDとする。
+</p>
+
+<hr>
+
+<h2>19. Custom Token</h2>
+
+<div class="rule">
+
+<pre>
+is_token = true
+
+AND
+
+include_tokens = true
+
+AND
+
+Class Filter
+
+AND
+
+Rarity Filter
+
+AND
+
+Classification Filter
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+Tokenに
+<strong>Pack Filterを適用しない。</strong>
+</p>
+
+<p>
+Tokenがどの通常Pack由来かという情報も
+回答範囲判定には使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>20. Custom開始最低枚数</h2>
+
+<div class="rule">
+
+<strong>
+Unique card_idが31枚以上の場合のみ開始可能。
+</strong>
+
+</div>
+
+<pre>
+対象カードが30枚以下となっています。
+カードを増やしてください。
+</pre>
+
+<hr>
+
+<h2>21. 正解Card決定</h2>
+
+<div class="rule">
+
+<ul>
+<li>Solo：Server Random。</li>
+<li>Daily：daily_configsの共通Answer。</li>
+<li>2人出題：出題者設定。</li>
+<li>Battle：Server Random。</li>
+</ul>
+
+</div>
+
+<div class="warning">
+
+<p>
+進行中GameのAnswer Card IDを
+Browserへ送信しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>22. Solo Game作成</h2>
+
+<pre>
+Browser
+
+↓
+
+POST Solo Create
+
+↓
+
+Worker
+
+・Request Validation
+・Current Version取得
+・Range生成
+・対象Card確認
+
+↓
+
+Answer Random選択
+
+↓
+
+GameSessionDO作成
+
+↓
+
+DO Storageへ保存
+
+↓
+
+gameId
+sessionToken
+Public Snapshot
+
+↓
+
+Browser
+</pre>
+
+<hr>
+
+<h2>23. Solo Game State例</h2>
+
+<pre>
+gameId
+mode
+status
+data_version_id
+version_code
+rangeMode
+rangeConfig
+answerCardId
+guessCount
+history
+usedHints
+createdAt
+startedAt
+lastActivityAt
+stateVersion
+sessionTokenHash
+requestResults
+</pre>
+
+<hr>
+
+<h2>24. Daily基本構造</h2>
+
+<pre>
+D1
+
+daily_configs
+├─ daily_key
+├─ data_version_id
+├─ answer_card_id
+├─ range_mode
+└─ range_config
+
+
+daily_controls
+├─ daily_key
+├─ status
+├─ reason
+├─ suspended_at
+└─ suspended_by
+
+
+             ↓
+
+Player A → GameSessionDO
+Player B → GameSessionDO
+Player C → GameSessionDO
+</pre>
+
+<div class="rule">
+
+<p>
+同じdaily_keyの正常なDaily Gameは
+全Player同じAnswerを使用する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>25. Daily Key</h2>
+
+<div class="rule">
+
+<strong>
+Daily切替はJST 05:00。
+</strong>
+
+</div>
+
+<pre>
+2026/07/28 04:59 JST
+→ daily_key = 2026-07-27
+
+
+2026/07/28 05:00 JST
+→ daily_key = 2026-07-28
+</pre>
+
+<div class="warning">
+
+<p>
+Browserの時計・Timezoneを
+正式Daily判定へ使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>26. Daily生成</h2>
+
+<div class="box">
+
+<p>
+Dailyは毎日05:00に必ず事前生成する方式ではなく、
+そのdaily_keyに対する最初のAccess時にLazy生成する。
+</p>
+
+</div>
+
+<pre>
+Daily Access
+
+↓
+
+daily_key算出
+
+↓
+
+daily_configsあり？
+
+YES
+→ 既存Config利用
+
+
+NO
+→ Current Version取得
+→ Answer候補生成
+→ daily_configs作成
+→ 正式Config再取得
+</pre>
+
+<hr>
+
+<h2>27. Daily同時生成</h2>
+
+<pre>
+Request A
+→ Candidate A
+
+Request B
+→ Candidate B
+
+↓
+
+daily_key UNIQUE
+
+↓
+
+正式登録は1Config
+
+↓
+
+両Requestが正式Configを再取得
+
+↓
+
+同じDailyを使用
+</pre>
+
+<div class="rule">
+
+<p>
+競合時に各Playerが別Answerを使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>28. daily_configs</h2>
+
+<pre>
+daily_key
+data_version_id
+answer_card_id
+range_mode
+range_config
+created_at
+</pre>
+
+<div class="rule">
+
+<p>
+Daily作成時に
+Currentの
+<code>data_version_id</code>
+を固定する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>29. daily_controls</h2>
+
+<pre>
+daily_key
+status
+reason
+suspended_at
+suspended_by
+created_at
+</pre>
+
+<div class="rule">
+
+<p>
+初期Statusは概念的に以下とする。
+</p>
+
+<pre>
+active
+suspended
+</pre>
+
+</div>
+
+<p>
+reason例：
+</p>
+
+<pre>
+card_update
+bug
+</pre>
+
+<hr>
+
+<h2>30. Daily Game作成</h2>
+
+<pre>
+Daily Create Request
+
+↓
+
+Serverでdaily_key算出
+
+↓
+
+daily_controls確認
+
+↓
+
+suspended ?
+
+YES
+→ DAILY_SUSPENDED
+
+
+NO
+↓
+
+daily_configs取得 / 作成
+
+↓
+
+data_version_id
+answer_card_id
+rangeConfig取得
+
+↓
+
+GameSessionDO作成
+
+↓
+
+Player専用Daily開始
+</pre>
+
+<div class="warning">
+
+<p>
+Browserへ
+<code>answer_card_id</code>
+を送信しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>31. Current変更とDaily Suspend</h2>
+
+<div class="warning">
+
+<strong>
+Current Versionを変更した場合、
+現在のdaily_keyのDailyを自動Suspendする。
+</strong>
+
+</div>
+
+<pre>
+Current Version
+
+A
+
+↓
+
+Admin
+
+CurrentをBへ変更
+
+↓
+
+現在のdaily_keyを算出
+
+↓
+
+daily_controls
+
+status = suspended
+reason = card_update
+
+↓
+
+当日のDaily停止
+</pre>
+
+<hr>
+
+<h2>32. Rollback時</h2>
+
+<div class="rule">
+
+<p>
+RollbackもCurrent Versionの変更であるため、
+現在のDailyをSuspendする。
+</p>
+
+</div>
+
+<pre>
+Current B
+
+↓
+
+Rollback
+
+Current A
+
+↓
+
+Current Change成立
+
+↓
+
+Current Daily Suspend
+</pre>
+
+<hr>
+
+<h2>33. Publishのみの場合</h2>
+
+<div class="rule">
+
+<p>
+新Data VersionをPublishedにしただけで
+Currentを切り替えない場合は
+DailyをSuspendしない。
+</p>
+
+</div>
+
+<pre>
+Version B
+
+Draft
+↓
+
+Published
+
+しかし
+
+Current = A のまま
+
+↓
+
+Daily継続
+</pre>
+
+<hr>
+
+<h2>34. Daily Suspendの理由</h2>
+
+<div class="box">
+
+<p>
+Daily全体の信頼性を維持できない場合、
+現在のdaily_keyを停止する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>reason</th>
+<th>用途</th>
+</tr>
+
+<tr>
+<td><code>card_update</code></td>
+<td>Current Version変更</td>
+</tr>
+
+<tr>
+<td><code>bug</code></td>
+<td>不具合による手動停止</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>35. 進行中Dailyの停止</h2>
+
+<div class="warning">
+
+<p>
+DailyがSuspendされた時点で
+すべてのGameSessionDOへ即時Broadcastすることを必須としない。
+</p>
+
+<p>
+Playerの次回Server Interaction時に
+停止を検出する。
+</p>
+
+</div>
+
+<pre>
+Daily Playing
+
+↓
+
+Admin / Current Change
+
+↓
+
+daily_controls = suspended
+
+↓
+
+Playerが次の操作
+
+Guess
+Hint
+Resume
+Surrender
+等
+
+↓
+
+Serverがdaily_controls確認
+
+↓
+
+DAILY_SUSPENDED
+</pre>
+
+<hr>
+
+<h2>36. Dailyで停止確認する操作</h2>
+
+<div class="rule">
+
+<p>
+少なくとも以下では
+Server側で現在のDaily Controlを確認する。
+</p>
+
+<ul>
+<li>Daily Start。</li>
+<li>Daily Resume。</li>
+<li>Daily Guess。</li>
+<li>Daily Hint。</li>
+<li>Daily Surrender。</li>
+<li>その他、Dailyの正式Stateを変更する操作。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>37. DAILY_SUSPENDED</h2>
+
+<div class="warning">
+
+<p>
+Daily停止は
+Normal Game Endではない。
+</p>
+
+</div>
+
+<pre>
+Daily Operation
+
+↓
+
+daily_controls.status = suspended
+
+↓
+
+DAILY_SUSPENDED
+
+↓
+
+GameSessionDO
+
+status = suspended
+
+↓
+
+Client
+
+Daily Stop Screen
+</pre>
+
+<hr>
+
+<h2>38. Daily suspended Status</h2>
+
+<div class="rule">
+
+<p>
+Daily停止用に
+専用Statusを使用する。
+</p>
+
+</div>
+
+<pre>
+playing
+
+↓
+
+suspended
+</pre>
+
+<div class="warning">
+
+<p>
+以下へ変換しない。
+</p>
+
+<pre>
+ended + failure
+ended + surrender
+ended + max_guesses
+</pre>
+
+</div>
+
+<hr>
+
+<h2>39. Daily停止時の正解</h2>
+
+<div class="warning">
+
+<strong>
+DAILY_SUSPENDEDでは正解を公開しない。
+</strong>
+
+</div>
+
+<ul>
+<li>answer_card_idを返さない。</li>
+<li>answerCardを返さない。</li>
+<li>Result Screenへ遷移しない。</li>
+<li>Failure扱いしない。</li>
+<li>Surrender扱いしない。</li>
+</ul>
+
+<hr>
+
+<h2>40. Daily停止時の操作</h2>
+
+<table>
+
+<tr>
+<th>操作</th>
+<th>Suspended後</th>
+</tr>
+
+<tr>
+<td>Guess</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>Hint</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>Surrender</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>Resume</td>
+<td>Game再開不可</td>
+</tr>
+
+<tr>
+<td>新規Daily Start</td>
+<td>当日不可</td>
+</tr>
+
+<tr>
+<td>再挑戦</td>
+<td>当日不可</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>41. Daily Stop Response</h2>
+
+<div class="example">
+
+<pre>
+{
+    "ok": false,
+
+    "error": {
+        "errorCode": "DAILY_SUSPENDED",
+        "message": "本日のデイリーは停止されています。"
+    }
+}
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+Responseへ正解情報を含めない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>42. Daily Stop Screen</h2>
+
+<pre>
+本日はカード更新もしくは不具合の影響で
+デイリーは停止されています。
+またAM5:00以降に遊びに来てください。
+</pre>
+
+<div class="rule">
+
+<p>
+この画面は05-07のNormal Result Screenとは別Stateとする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>43. Suspended daily_keyの再開</h2>
+
+<div class="warning">
+
+<p>
+一度Suspendされたdaily_keyを
+同日のうちに自動Resumeしない。
+</p>
+
+</div>
+
+<pre>
+daily_key = 2026-07-28
+
+status = suspended
+
+↓
+
+当日中
+
+復活しない
+
+↓
+
+翌JST 05:00
+
+daily_key = 2026-07-29
+
+↓
+
+新Daily生成可能
+</pre>
+
+<hr>
+
+<h2>44. Daily再挑戦</h2>
+
+<div class="rule">
+
+<p>
+Dailyがactiveで正常終了している場合は
+同じdaily_keyへ再挑戦可能。
+</p>
+
+</div>
+
+<pre>
+GameSessionDO A
+
+↓
+
+Normal End
+
+↓
+
+Retry
+
+↓
+
+GameSessionDO B
+
+↓
+
+同じdaily_key
+同じanswer_card_id
+</pre>
+
+<div class="warning">
+
+<p>
+daily_keyがsuspendedの場合は再挑戦不可。
+</p>
+
+</div>
+
+<hr>
+
+<h2>45. Dailyが05:00を跨いだ場合</h2>
+
+<div class="box">
+
+<p>
+DailyがactiveのままJST 05:00を跨いだだけでは、
+開始済みSessionを強制終了しない。
+</p>
+
+</div>
+
+<pre>
+04:55
+
+Daily A開始
+
+↓
+
+05:00
+
+Daily B開始可能
+
+↓
+
+既存Daily A
+
+GameSessionDO内の
+daily_key / data_version_idを維持
+</pre>
+
+<div class="notice">
+
+<p>
+ただし対象daily_keyがすでにsuspendedの場合は
+Resume / 次回Server Interactionで停止する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>46. 2人出題</h2>
+
+<div class="box">
+
+<p>
+2人出題は
+<code>ChallengeGameDO</code>
+で管理する。
+</p>
+
+</div>
+
+<pre>
+Setter
+
+↓
+
+Answer設定
+
+↓
+
+ChallengeGameDO
+
+↓
+
+Guesser
+</pre>
+
+<hr>
+
+<h2>47. 2人出題の正解設定</h2>
+
+<pre>
+Setter
+
+card_id
+
+↓
+
+Server
+
+・Card存在確認
+・data_version_id確認
+・回答範囲確認
+
+↓
+
+answerCardIdとして保存
+
+↓
+
+answerLocked = true
+</pre>
+
+<div class="rule">
+
+<p>
+正解設定後の変更を初期版では不可とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>48. 2人出題の出題者退出</h2>
+
+<div class="rule">
+
+<p>
+Answer設定後は、
+Setter接続をGuesserのGame継続条件にしない。
+</p>
+
+<ul>
+<li>Setter Tab Close → 継続。</li>
+<li>Setter Network Disconnect → 継続。</li>
+<li>Setter明示退出 → 継続。</li>
+<li>AnswerはChallengeGameDOが保持。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>49. 2人出題の回答者</h2>
+
+<div class="rule">
+
+<ul>
+<li>最大10Guess。</li>
+<li>Hintなし。</li>
+<li>Surrender可能。</li>
+<li>正解でNormal End。</li>
+<li>10Guess終了でNormal End。</li>
+<li>SurrenderでNormal End。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>50. 2人出題の回答者切断</h2>
+
+<pre>
+Guesser Disconnect
+
+↓
+
+disconnectDeadline
+=
+serverNow + 30秒
+
+↓
+
+30秒以内にReconnect
+→ 継続
+
+30秒以内に戻らない
+→ Session End
+</pre>
+
+<div class="rule">
+
+<p>
+SetterのDisconnectには
+この終了条件を適用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>51. Battle Room</h2>
+
+<div class="box">
+
+<p>
+Battleは
+<code>BattleRoomDO</code>
+で管理する。
+</p>
+
+</div>
+
+<pre>
+Player 1
+   │
+   ├── WebSocket ──┐
+   │                │
+   │          BattleRoomDO
+   │                │
+   └── WebSocket ──┤
+                    │
+Player 2 ───────────┘
+</pre>
+
+<hr>
+
+<h2>52. Battle Room ID</h2>
+
+<div class="rule">
+
+<strong>
+6文字の英大文字・数字。
+</strong>
+
+<pre>
+[A-Z0-9]{6}
+</pre>
+
+</div>
+
+<div class="example">
+
+<pre>
+A7K3ZQ
+
+92AB5X
+</pre>
+
+</div>
+
+<hr>
+
+<h2>53. Room ID生成</h2>
+
+<pre>
+Server Random生成
+
+↓
+
+有効Roomで使用中？
+
+YES
+→ 再生成
+
+NO
+→ 採用
+</pre>
+
+<div class="warning">
+
+<p>
+Client指定Room IDを
+そのまま正式IDとして採用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>54. Room ID再利用</h2>
+
+<div class="rule">
+
+<p>
+Room IDは永久欠番にしない。
+</p>
+
+<p>
+旧Roomが完全削除された後は
+同一6文字IDを将来再利用可能。
+</p>
+
+</div>
+
+<hr>
+
+<h2>55. Battle参加人数</h2>
+
+<table>
+
+<tr>
+<th>人数</th>
+<th>処理</th>
+</tr>
+
+<tr>
+<td>1人</td>
+<td>Waiting</td>
+</tr>
+
+<tr>
+<td>2人</td>
+<td>参加可能</td>
+</tr>
+
+<tr>
+<td>3人目</td>
+<td>拒否</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+初期版にSpectatorなし。
+</p>
+
+</div>
+
+<hr>
+
+<h2>56. Battle READY</h2>
+
+<pre>
+Player 1
+READY = true
+
+Player 2
+READY = true
+
+↓
+
+BattleRoomDO内で確認
+
+↓
+
+AtomicにStart
+</pre>
+
+<div class="rule">
+
+<p>
+READY確認とplayingへの遷移を
+同一DO内部で処理する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>57. Battle開始処理</h2>
+
+<pre>
+両者READY
+
+↓
+
+status = playing
+
+↓
+
+Answer Random決定
+
+↓
+
+先攻Random決定
+
+↓
+
+Guess Count
+各0
+
+↓
+
+turnStartedAt = serverNow
+
+↓
+
+deadline
+=
+serverNow + 120秒
+
+↓
+
+stateVersion++
+
+↓
+
+Storage保存
+
+↓
+
+両PlayerへSnapshot
+</pre>
+
+<hr>
+
+<h2>58. Battle回答回数</h2>
+
+<pre>
+Player 1
+最大10Guess
+
+Player 2
+最大10Guess
+
+↓
+
+合計最大20Guess
+</pre>
+
+<div class="rule">
+
+<p>
+20Guess完了して正解者なしならDraw。
+</p>
+
+</div>
+
+<hr>
+
+<h2>59. Battle Turn</h2>
+
+<pre>
+Player 1
+
+↓
+
+Player 2
+
+↓
+
+Player 1
+
+↓
+
+Player 2
+</pre>
+
+<div class="rule">
+
+<p>
+Current Turnは
+BattleRoomDOだけが正式決定する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>60. Battle制限時間</h2>
+
+<div class="rule">
+
+<strong>
+1Turn 120秒。
+</strong>
+
+</div>
+
+<pre>
+turnStartedAt = serverNow
+
+deadline =
+turnStartedAt + 120000ms
+</pre>
+
+<hr>
+
+<h2>61. Client Countdown</h2>
+
+<pre>
+Server
+
+serverNow
+deadline
+
+↓
+
+Browser
+
+Time Offset計算
+
+↓
+
+Countdown表示
+</pre>
+
+<div class="rule">
+
+<p>
+1秒ごとにWebSocketで残秒数を送信しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>62. 正式Timeout判定</h2>
+
+<div class="warning">
+
+<strong>
+Browserの0:00表示ではなくServer Timeを正とする。
+</strong>
+
+</div>
+
+<pre>
+serverNow >= deadline
+
+↓
+
+Timeout
+</pre>
+
+<hr>
+
+<h2>63. deadline直前のGuess</h2>
+
+<pre>
+deadline
+12:00:00.000
+
+Browser Click
+11:59:59.950
+
+Server処理
+12:00:00.020
+
+↓
+
+serverNow >= deadline
+
+↓
+
+Player Guess不成立
+
+↓
+
+Timeout処理優先
+</pre>
+
+<hr>
+
+<h2>64. Durable Object Alarm</h2>
+
+<div class="box">
+
+<p>
+未来時刻に発生する処理には
+DO Alarmを使用する。
+</p>
+
+</div>
+
+<ul>
+<li>Turn Deadline。</li>
+<li>Reconnect Deadline。</li>
+<li>Session TTL。</li>
+<li>Waiting Room Expire。</li>
+<li>Result Cleanup。</li>
+</ul>
+
+<div class="warning">
+
+<p>
+<code>setInterval()</code>
+等でDOを常時稼働させ続けない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>65. 複数Deadline</h2>
+
+<pre>
+turnDeadline
+
+reconnectDeadlinePlayer1
+
+reconnectDeadlinePlayer2
+
+unstartedRoomExpireAt
+
+resultCleanupAt
+</pre>
+
+<div class="rule">
+
+<p>
+最も早い期限へ次のAlarmを設定する。
+</p>
+
+</div>
+
+<pre>
+期限一覧
+
+↓
+
+Earliest Deadline
+
+↓
+
+Alarm
+
+↓
+
+起動時に全期限を再確認
+
+↓
+
+成立した処理のみ実行
+
+↓
+
+次のEarliest Deadlineへ再設定
+</pre>
+
+<hr>
+
+<h2>66. Alarmの冪等性</h2>
+
+<div class="rule">
+
+<p>
+Alarm起動時は必ず現在Stateを再確認する。
+</p>
+
+</div>
+
+<pre>
+Alarm
+
+↓
+
+しかし既にGuess済み
+
+↓
+
+旧deadline無効
+
+↓
+
+Timeout Guessを生成しない
+</pre>
+
+<hr>
+
+<h2>67. Timeout Random Guess</h2>
+
+<pre>
+Timeout成立
+
+↓
+
+eligibleCards
+
+↓
+
+answer_card_id除外
+
+↓
+
+Random 1枚
+
+↓
+
+通常Guess処理
+
+↓
+
+History追加
+
+↓
+
+Guess Count追加
+</pre>
+
+<div class="rule">
+
+<p>
+回答済みCardは除外しない。
+</p>
+
+<p>
+同じCardが再び選ばれることを許可する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>68. Timeout候補0件</h2>
+
+<div class="warning">
+
+<pre>
+answer除外
+
+↓
+
+Candidate 0件
+
+↓
+
+Random Guess生成不可
+
+↓
+
+Game / Data Error
+
+↓
+
+status = error
+</pre>
+
+</div>
+
+<hr>
+
+<h2>69. WebSocket利用Mode</h2>
+
+<table>
+
+<tr>
+<th>Mode</th>
+<th>Communication</th>
+</tr>
+
+<tr>
+<td>Solo</td>
+<td>HTTP API中心</td>
+</tr>
+
+<tr>
+<td>Daily</td>
+<td>HTTP API中心</td>
+</tr>
+
+<tr>
+<td>2人出題</td>
+<td>HTTP + WebSocket</td>
+</tr>
+
+<tr>
+<td>Battle</td>
+<td>WebSocket中心</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>70. WebSocket Hibernation</h2>
+
+<div class="rule">
+
+<p>
+2人ModeでDOが受け入れるWebSocketは
+Hibernationを利用できる構造とする。
+</p>
+
+<p>
+通信がない間もJavaScript Instanceを
+常時起動状態へ保つ必要がない構成とする。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+Hibernation復帰時にMemory Stateへ依存せず、
+Storageから復元する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>71. WebSocket Attachment</h2>
+
+<pre>
+playerId
+connectionId
+role
+</pre>
+
+<div class="warning">
+
+<p>
+Raw sessionToken / reconnectTokenを
+Attachmentへ不要に保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>72. WebSocket認証</h2>
+
+<div class="warning">
+
+<p>
+Secret TokenをWebSocket URL Queryへ直接含めない。
+</p>
+
+</div>
+
+<pre>
+WebSocket Connect
+
+↓
+
+Unauthenticated
+
+↓
+
+First Message
+
+{
+    "type": "auth",
+    "playerId": "...",
+    "reconnectToken": "..."
+}
+
+↓
+
+Server Verification
+
+↓
+
+Authenticated
+
+↓
+
+Snapshot
+</pre>
+
+<hr>
+
+<h2>73. reconnectToken</h2>
+
+<div class="rule">
+
+<p>
+Battle Playerごとに
+推測困難なreconnectTokenを発行する。
+</p>
+
+</div>
+
+<pre>
+Browser
+
+RAW reconnectToken
+
+
+Server / DO Storage
+
+reconnectTokenHash
+</pre>
+
+<hr>
+
+<h2>74. sessionToken</h2>
+
+<div class="box">
+
+<p>
+Solo / Daily / 2人出題は
+Resumeのため
+<code>gameId</code>
++
+<code>sessionToken</code>
+を使用する。
+</p>
+
+</div>
+
+<pre>
+Browser
+
+gameId
+sessionToken
+
+
+DO
+
+gameId
+sessionTokenHash
+</pre>
+
+<hr>
+
+<h2>75. Token生成</h2>
+
+<div class="rule">
+
+<p>
+sessionToken / reconnectTokenは
+Server側で推測困難なRandom値として生成する。
+</p>
+
+<p>
+256bit相当以上を初期設計上の基本とする。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+6文字Room IDを認証Tokenとして兼用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>76. Tokenの保存場所</h2>
+
+<div class="box">
+
+<p>
+Browser側ではResumeに必要なRaw Tokenを
+localStorageへ短期保存可能とする。
+</p>
+
+</div>
+
+<pre>
+sg:game:[gameId]
+
+{
+    "gameId": "...",
+    "mode": "solo",
+    "sessionToken": "..."
+}
+
+
+sg:battle:[roomId]
+
+{
+    "roomId": "A7K3ZQ",
+    "playerId": "...",
+    "reconnectToken": "..."
+}
+</pre>
+
+<div class="warning">
+
+<p>
+Answer Card IDをlocalStorageへ保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>77. HTTP認証</h2>
+
+<pre>
+Authorization:
+Bearer [sessionToken]
+</pre>
+
+<div class="rule">
+
+<p>
+Secret Tokenは可能な限りURLへ入れない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>78. Page Reload / Resume</h2>
+
+<pre>
+Reload
+
+↓
+
+localStorage
+
+gameId
+sessionToken
+
+↓
+
+Resume API
+
+↓
+
+DO
+
+Token Verification
+
+↓
+
+Current Snapshot
+
+↓
+
+UI復元
+</pre>
+
+<div class="rule">
+
+<p>
+ReloadをGame Reset扱いしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>79. Daily Resume</h2>
+
+<pre>
+Daily Resume
+
+↓
+
+sessionToken確認
+
+↓
+
+GameSessionDO取得
+
+↓
+
+daily_controls確認
+
+↓
+
+active
+→ Snapshot返却
+
+
+suspended
+→ Game status = suspended
+→ DAILY_SUSPENDED
+→ Answer非公開
+</pre>
+
+<hr>
+
+<h2>80. Ongoing Snapshot</h2>
+
+<div class="warning">
+
+<p>
+進行中Snapshotへ
+Answer Card IDを含めない。
+</p>
+
+</div>
+
+<p>
+Normal Game End済みの場合のみ、
+05-07 Resultに必要なAnswer情報を返す。
+</p>
+
+<div class="warning">
+
+<p>
+Daily suspendedでは
+EndedではないためAnswerを返さない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>81. Battle Reconnect</h2>
+
+<pre>
+WebSocket Disconnect
+
+↓
+
+connected = false
+
+↓
+
+reconnectDeadline
+=
+serverNow + 30秒
+
+↓
+
+Reconnect Tokenで再接続
+
+↓
+
+Token Verification
+
+↓
+
+Deadline内？
+
+YES
+→ connected = true
+→ Complete Snapshot
+→ 継続
+</pre>
+
+<hr>
+
+<h2>82. 最新Connection</h2>
+
+<div class="rule">
+
+<p>
+同Playerで新しい正常認証済みConnectionが成立した場合、
+最新Connectionを正式操作Connectionとする。
+</p>
+
+<p>
+旧Connectionは閉じるか操作権限を失わせる。
+</p>
+
+</div>
+
+<hr>
+
+<h2>83. 30秒以内に戻らない場合</h2>
+
+<pre>
+Player 1 Disconnect
+
+↓
+
+30秒経過
+
+↓
+
+Player 1未復帰
+
+↓
+
+Player 1 Lose
+
+Player 2 Win
+</pre>
+
+<hr>
+
+<h2>84. 双方Disconnect</h2>
+
+<pre>
+Player 1 Disconnect
+
+Player 2 Disconnect
+
+↓
+
+双方ともGrace内に戻らない
+
+↓
+
+Battle End
+
+↓
+
+Cleanup
+</pre>
+
+<div class="rule">
+
+<p>
+双方不在Roomを無期限保持しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>85. 明示Exitとの違い</h2>
+
+<table>
+
+<tr>
+<th>状態</th>
+<th>Reconnect Grace</th>
+</tr>
+
+<tr>
+<td>Network Disconnect</td>
+<td>30秒</td>
+</tr>
+
+<tr>
+<td>Tab強制終了</td>
+<td>30秒</td>
+</tr>
+
+<tr>
+<td>Browser Crash</td>
+<td>30秒</td>
+</tr>
+
+<tr>
+<td>「退出する」確定</td>
+<td>なし</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+明示Exitは即時敗北。
+</p>
+
+</div>
+
+<hr>
+
+<h2>86. Complete Snapshot</h2>
+
+<pre>
+{
+    "roomId": "...",
+    "status": "playing",
+    "data_version_id": "...",
+    "version_code": "2026-07-28-01",
+    "stateVersion": 20,
+    "players": [],
+    "ready": {},
+    "currentTurn": "...",
+    "serverNow": 0,
+    "deadline": 0,
+    "guessCounts": {},
+    "history": [],
+    "disconnectState": {},
+    "result": null
+}
+</pre>
+
+<div class="warning">
+
+<p>
+Playing中はanswerCardIdを含めない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>87. stateVersion</h2>
+
+<div class="rule">
+
+<p>
+Game Stateへ単調増加する
+<code>stateVersion</code>
+を付与する。
+</p>
+
+</div>
+
+<pre>
+1
+2
+3
+4
+5
+...
+</pre>
+
+<p>
+正式State変更ごとに増加させる。
+</p>
+
+<hr>
+
+<h2>88. 古いState</h2>
+
+<pre>
+Client
+
+stateVersion = 20
+
+
+Delayed Message
+
+stateVersion = 18
+
+↓
+
+18 &lt; 20
+
+↓
+
+Ignore
+</pre>
+
+<div class="rule">
+
+<p>
+遅延ResponseでUIを過去Stateへ戻さない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>89. stateVersion更新対象</h2>
+
+<div class="box">
+
+<ul>
+<li>Guess成立。</li>
+<li>Hint開示。</li>
+<li>Surrender。</li>
+<li>READY変更。</li>
+<li>Battle Start。</li>
+<li>Turn変更。</li>
+<li>Deadline変更。</li>
+<li>Disconnect。</li>
+<li>Reconnect。</li>
+<li>Exit。</li>
+<li>Win / Lose / Draw確定。</li>
+<li>Daily suspended遷移。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>90. requestId</h2>
+
+<div class="rule">
+
+<strong>
+同一requestIdの状態変更を二重成立させない。
+</strong>
+
+</div>
+
+<p>
+対象：
+</p>
+
+<ul>
+<li>Guess。</li>
+<li>Hint。</li>
+<li>Surrender。</li>
+<li>READY。</li>
+<li>READY解除。</li>
+<li>Exit。</li>
+<li>Answer設定。</li>
+<li>その他重要なState変更。</li>
+</ul>
+
+<hr>
+
+<h2>91. requestId処理</h2>
+
+<pre>
+requestId = ABC123
+
+↓
+
+DO
+
+↓
+
+Processed？
+
+NO
+→ 正式処理
+→ Result保存
+→ Response
+
+
+YES
+→ 新規処理なし
+→ 前回Result返却
+</pre>
+
+<hr>
+
+<h2>92. requestId Conflict</h2>
+
+<pre>
+requestId = ABC
+
+1回目
+card_id = A
+
+
+2回目
+requestId = ABC
+card_id = B
+
+↓
+
+REQUEST_ID_CONFLICT
+</pre>
+
+<div class="rule">
+
+<p>
+同じrequestIdへ
+別Payloadを再利用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>93. requestId保持</h2>
+
+<div class="rule">
+
+<p>
+初期版ではGame Sessionが削除されるまで
+処理済みrequestIdと結果を保持する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>94. Guess処理順序</h2>
+
+<pre>
+Guess Request
+
+↓
+
+Auth
+
+↓
+
+requestId
+
+↓
+
+Game Status
+
+↓
+
+Dailyならdaily_controls確認
+
+↓
+
+Battleならdeadline確認
+
+↓
+
+Turn確認
+
+↓
+
+Guess Count確認
+
+↓
+
+card_id存在確認
+
+↓
+
+data_version_id確認
+
+↓
+
+Range確認
+
+↓
+
+Guess Card取得
+
+↓
+
+Answer Card取得
+
+↓
+
+Judgement
+
+↓
+
+History追加
+
+↓
+
+Guess Count更新
+
+↓
+
+Correct / Continue / End
+
+↓
+
+stateVersion++
+
+↓
+
+Storage保存
+
+↓
+
+requestId結果保存
+
+↓
+
+Response / Broadcast
+</pre>
+
+<hr>
+
+<h2>95. Battle deadlineの優先順位</h2>
+
+<div class="warning">
+
+<strong>
+Battleではcard_id判定より先にdeadlineを確認する。
+</strong>
+
+</div>
+
+<pre>
+serverNow >= deadline ?
+
+YES
+
+↓
+
+Timeout
+
+↓
+
+届いたPlayer Guessは成立させない
+</pre>
+
+<hr>
+
+<h2>96. Daily状態確認の優先順位</h2>
+
+<div class="warning">
+
+<p>
+Dailyでは新しいGuess・Hint等を成立させる前に
+Daily Suspendを確認する。
+</p>
+
+</div>
+
+<pre>
+Daily Guess
+
+↓
+
+Auth
+
+↓
+
+requestId
+
+↓
+
+daily_controls
+
+↓
+
+suspended ?
+
+YES
+
+↓
+
+Player Guessを成立させない
+
+↓
+
+DAILY_SUSPENDED
+</pre>
+
+<hr>
+
+<h2>97. Game正解判定</h2>
+
+<div class="rule">
+
+<pre>
+guessedCardId === answerCardId
+</pre>
+
+</div>
+
+<p>
+Card属性がすべて同じ別Cardであっても
+card_idが異なれば正解ではない。
+</p>
+
+<hr>
+
+<h2>98. Attribute Judgement</h2>
+
+<pre>
+card_set
+class
+rarity
+type
+tribes
+cost
+atk
+life
+keywords
+</pre>
+
+<div class="rule">
+
+<p>
+正式判定は03を正とする。
+</p>
+
+<p>
+<code>skill_text</code>
+は判定しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>99. Answer Card Cache</h2>
+
+<div class="rule">
+
+<p>
+同Game内でAnswer Card Dataを
+DO Memoryへ一時Cacheしてよい。
+</p>
+
+<p>
+Memory消失時は
+<code>answerCardId</code>
++
+<code>data_version_id</code>
+からD1へ再取得できること。
+</p>
+
+</div>
+
+<hr>
+
+<h2>100. Answer秘匿</h2>
+
+<div class="warning">
+
+<p>
+Normal End前に以下をBrowserへ送信しない。
+</p>
+
+<ul>
+<li>answerCardId。</li>
+<li>answerCardName。</li>
+<li>Answer Card全Data。</li>
+<li>Answerを復元可能な秘密値。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>101. Snapshot権限</h2>
+
+<table>
+
+<tr>
+<th>対象</th>
+<th>Answer情報</th>
+</tr>
+
+<tr>
+<td>Solo Playing</td>
+<td>非公開</td>
+</tr>
+
+<tr>
+<td>Daily Playing</td>
+<td>非公開</td>
+</tr>
+
+<tr>
+<td>Daily Suspended</td>
+<td>非公開</td>
+</tr>
+
+<tr>
+<td>Challenge Guesser</td>
+<td>非公開</td>
+</tr>
+
+<tr>
+<td>Challenge Setter</td>
+<td>自身が設定したAnswerを確認可能</td>
+</tr>
+
+<tr>
+<td>Battle Playing</td>
+<td>非公開</td>
+</tr>
+
+<tr>
+<td>Normal Game End</td>
+<td>公開可能</td>
+</tr>
+
+<tr>
+<td>Game Error</td>
+<td>非公開を基本</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>102. API URL設定</h2>
+
+<pre>
+SG_CONFIG = {
+
+    apiBaseUrl: "...",
+
+    websocketBaseUrl: "...",
+
+    imageBaseUrl: "..."
+
+}
+</pre>
+
+<div class="rule">
+
+<p>
+開発・本番・外部Site組み込みで
+差し替え可能な構造にする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>103. API Version</h2>
+
+<div class="rule">
+
+<pre>
+/api/v1/
+</pre>
+
+</div>
+
+<p>
+破壊的変更が必要になった場合に
+Versionを分離できる構造とする。
+</p>
+
+<hr>
+
+<h2>104. Public API例</h2>
+
+<pre>
+POST
+/api/v1/solo/create
+
+
+POST
+/api/v1/daily/create
+
+
+GET
+/api/v1/daily/current
+
+
+POST
+/api/v1/game/{gameId}/resume
+
+
+POST
+/api/v1/game/{gameId}/guess
+
+
+POST
+/api/v1/game/{gameId}/hint
+
+
+POST
+/api/v1/game/{gameId}/surrender
+
+
+POST
+/api/v1/challenge/create
+
+
+POST
+/api/v1/challenge/{gameId}/set-answer
+
+
+POST
+/api/v1/challenge/{gameId}/join
+
+
+POST
+/api/v1/battle/create
+
+
+POST
+/api/v1/battle/{roomId}/join
+
+
+WebSocket
+/api/v1/battle/{roomId}/ws
+</pre>
+
+<div class="notice">
+
+<p>
+最終Endpoint名は実装時に整理可能。
+</p>
+
+</div>
+
+<hr>
+
+<h2>105. API Success Response</h2>
+
+<pre>
+{
+    "ok": true,
+
+    "data": {
+        ...
+    }
+}
+</pre>
+
+<p>
+State変更Responseには必要に応じて以下を含める。
+</p>
+
+<pre>
+requestId
+stateVersion
+serverNow
+version_code
+</pre>
+
+<hr>
+
+<h2>106. API Error Response</h2>
+
+<pre>
+{
+    "ok": false,
+
+    "error": {
+        "errorId": "SG-...",
+        "errorCode": "CARD_DATA_INVALID",
+        "message": "データ不具合が発生しました。"
+    }
+}
+</pre>
+
+<div class="warning">
+
+<p>
+Stack Trace・SQL・Secret等を返さない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>107. Daily Suspended Response</h2>
+
+<div class="example">
+
+<pre>
+{
+    "ok": false,
+
+    "error": {
+        "errorCode": "DAILY_SUSPENDED",
+        "message": "本日のデイリーは停止されています。"
+    }
+}
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+Daily StopはCard Data Errorとは異なる
+運営上のGame Stateとして扱う。
+</p>
+
+</div>
+
+<hr>
+
+<h2>108. API Cache</h2>
+
+<div class="rule">
+
+<p>
+進行中Game API・Guess Result・Resume等は
+Browser / CDNへ不適切にCacheさせない。
+</p>
+
+</div>
+
+<pre>
+Cache-Control: no-store
+</pre>
+
+<hr>
+
+<h2>109. Search Index Cache</h2>
+
+<div class="rule">
+
+<p>
+Version CodeをFilenameへ含めるため、
+Versioned Search Indexは長期Cache可能な構造とする。
+</p>
+
+</div>
+
+<pre>
+card-search-index-2026-07-28-01.json
+</pre>
+
+<div class="warning">
+
+<p>
+Published済みVersion Fileを
+後から同じFilenameのまま書き換えない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>110. Search IndexとVersion</h2>
+
+<pre>
+DO
+
+data_version_id = A
+version_code = 2026-07-28-01
+
+↓
+
+Browser
+
+card-search-index-2026-07-28-01.json
+
+↓
+
+Server
+
+D1 data_version_id = A
+</pre>
+
+<div class="rule">
+
+<p>
+Game・Search Index・Card Masterを
+同一Data Versionへ揃える。
+</p>
+
+</div>
+
+<hr>
+
+<h2>111. Session TTL</h2>
+
+<div class="rule">
+
+<strong>
+Solo / Daily進行中Gameは
+最終Activityから24時間を基本TTLとする。
+</strong>
+
+</div>
+
+<pre>
+lastActivityAt
+
++
+
+24時間
+
+↓
+
+sessionExpireAt
+</pre>
+
+<div class="notice">
+
+<p>
+これはGame制限時間ではない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>112. Suspended DailyとTTL</h2>
+
+<div class="box">
+
+<p>
+Daily Suspendが成立したSessionは
+通常Playing Sessionとして再開しない。
+</p>
+
+</div>
+
+<p>
+Storage Cleanup自体は
+通常のSession cleanup方針に従ってよい。
+</p>
+
+<hr>
+
+<h2>113. Normal End後保持</h2>
+
+<table>
+
+<tr>
+<th>Mode</th>
+<th>Result保持</th>
+</tr>
+
+<tr>
+<td>Solo</td>
+<td>30分</td>
+</tr>
+
+<tr>
+<td>Daily</td>
+<td>30分</td>
+</tr>
+
+<tr>
+<td>2人出題</td>
+<td>30分</td>
+</tr>
+
+<tr>
+<td>Battle</td>
+<td>5分</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>114. Battle Waiting Room TTL</h2>
+
+<div class="rule">
+
+<strong>
+未開始Roomは最終Activityから30分。
+</strong>
+
+</div>
+
+<p>
+Activity例：
+</p>
+
+<ul>
+<li>Join。</li>
+<li>READY変更。</li>
+<li>Creator Room操作。</li>
+</ul>
+
+<hr>
+
+<h2>115. Battle Creator権限</h2>
+
+<div class="rule">
+
+<p>
+Battle開始前のみCreatorは
+以下を実行可能。
+</p>
+
+<ul>
+<li>Room解散。</li>
+<li>参加Player退出処理。</li>
+</ul>
+
+</div>
+
+<div class="warning">
+
+<p>
+Game Start後にCreator専用の勝敗操作権限を持たせない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>116. 自動Cleanup</h2>
+
+<pre>
+Deadline到達
+
+↓
+
+DO Alarm
+
+↓
+
+現在State確認
+
+↓
+
+本当に期限切れ？
+
+YES
+
+↓
+
+Storage Cleanup
+</pre>
+
+<hr>
+
+<h2>117. Cleanup対象</h2>
+
+<ul>
+<li>Answer Card ID。</li>
+<li>History。</li>
+<li>Used Hints。</li>
+<li>requestId Results。</li>
+<li>sessionTokenHash。</li>
+<li>reconnectTokenHash。</li>
+<li>Player State。</li>
+<li>Deadline。</li>
+</ul>
+
+<hr>
+
+<h2>118. Browser Session Data Cleanup</h2>
+
+<div class="rule">
+
+<p>
+End / Expire確認後、
+不要なlocalStorage情報を削除する。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+Browser側削除に失敗して古Tokenが残っていても、
+Server側で無効Tokenを拒否できる構造とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>119. Security</h2>
+
+<div class="box">
+
+<ul>
+<li>D1をBrowserから直接操作させない。</li>
+<li>DO NamespaceをClientへ直接公開しない。</li>
+<li>AnswerをHTMLへ埋め込まない。</li>
+<li>Secret TokenをURLへ不要に載せない。</li>
+<li>Raw TokenをServer Logへ保存しない。</li>
+<li>Client Stateを信用しない。</li>
+<li>すべてのState変更をServer側で再検証する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>120. Client改変対策</h2>
+
+<div class="warning">
+
+<p>
+以下はClientから送られても信用しない。
+</p>
+
+<ul>
+<li>残りGuess数。</li>
+<li>Current Turn。</li>
+<li>READY。</li>
+<li>Deadline。</li>
+<li>回答可能Card集合。</li>
+<li>Game End。</li>
+<li>Used Hint。</li>
+<li>Daily Active / Suspended。</li>
+<li>Data Version。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>121. CORS</h2>
+
+<div class="rule">
+
+<p>
+PagesとAPIを同一Originにできる場合は
+同一Originを優先する。
+</p>
+
+<p>
+別Originの場合は
+許可されたFrontend Originのみを許可する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+認証付きGame APIへ無条件に
+</p>
+
+<pre>
+Access-Control-Allow-Origin: *
+</pre>
+
+<p>
+を適用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>122. Input Validation</h2>
+
+<ul>
+<li>JSON Structure。</li>
+<li>String Length。</li>
+<li>Room ID Format。</li>
+<li>card_id Format。</li>
+<li>requestId Format。</li>
+<li>Mode。</li>
+<li>Custom Config。</li>
+<li>Token。</li>
+<li>Current Game State。</li>
+</ul>
+
+<hr>
+
+<h2>123. Card Data Error</h2>
+
+<div class="warning">
+
+<p>
+03・04で定義したCard Data異常を検出した場合、
+推測値でGameを続行しない。
+</p>
+
+</div>
+
+<pre>
+Data Error
+
+↓
+
+Normal Judgement中止
+
+↓
+
+errorId生成
+
+↓
+
+D1 error_logs
+
+↓
+
+Game status = error
+
+↓
+
+Safe Error Screen
+</pre>
+
+<hr>
+
+<h2>124. error_logs</h2>
+
+<pre>
+error_id
+error_code
+occurred_at
+data_version_id
+game_mode
+game_id
+room_id
+answer_card_id
+guessed_card_id
+invalid_field
+request_id
+</pre>
+
+<div class="warning">
+
+<p>
+以下を保存しない。
+</p>
+
+<ul>
+<li>Raw sessionToken。</li>
+<li>Raw reconnectToken。</li>
+<li>Secret Key。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>125. Game Status</h2>
+
+<div class="box">
+
+<p>
+Game状態は意味の明確な値で管理する。
+</p>
+
+</div>
+
+<pre>
+waiting
+playing
+ended
+suspended
+expired
+error
+</pre>
+
+<div class="rule">
+
+<p>
+<code>suspended</code>
+はDaily専用の非通常終了Stateとして使用可能。
+</p>
+
+</div>
+
+<hr>
+
+<h2>126. Battle Status例</h2>
+
+<pre>
+waiting_players
+waiting_ready
+playing
+ended
+expired
+error
+</pre>
+
+<hr>
+
+<h2>127. Challenge Status例</h2>
+
+<pre>
+waiting_answer
+waiting_guesser
+playing
+ended
+expired
+error
+</pre>
+
+<hr>
+
+<h2>128. Game End Reason例</h2>
+
+<pre>
+correct
+max_guesses
+surrender
+draw
+leave
+disconnect_forfeit
+</pre>
+
+<div class="warning">
+
+<p>
+Daily SuspendをNormal endReasonへ入れず
+専用statusとして扱う。
+</p>
+
+</div>
+
+<hr>
+
+<h2>129. Server Time</h2>
+
+<div class="rule">
+
+<p>
+Deadline・Reconnect・TTL・Daily等の正式Timeは
+Server Timeを使用する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+Client
+<code>Date.now()</code>
+を正式期限判定へ使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>130. Time Zone</h2>
+
+<table>
+
+<tr>
+<th>用途</th>
+<th>基準</th>
+</tr>
+
+<tr>
+<td>内部Time</td>
+<td>UTC / Unix Timestamp</td>
+</tr>
+
+<tr>
+<td>Daily Key</td>
+<td>Server TimeをJST変換</td>
+</tr>
+
+<tr>
+<td>Battle Deadline</td>
+<td>Server Absolute Time</td>
+</tr>
+
+<tr>
+<td>Reconnect</td>
+<td>Server Absolute Time</td>
+</tr>
+
+<tr>
+<td>TTL</td>
+<td>Server Absolute Time</td>
+</tr>
+
+<tr>
+<td>User表示</td>
+<td>表示層で変換</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>131. Disconnect中のBattle Deadline</h2>
+
+<div class="rule">
+
+<p>
+PlayerがDisconnectしても
+Turn Deadlineは停止しない。
+</p>
+
+</div>
+
+<pre>
+Turn残り10秒
+
+↓
+
+Disconnect
+
+↓
+
+10秒経過
+
+↓
+
+Timeout Guess成立
+
+↓
+
+Reconnect Graceは別途継続
+</pre>
+
+<hr>
+
+<h2>132. ModalとDeadline</h2>
+
+<div class="rule">
+
+<p>
+05-08のExit確認Modal等を開いても
+Battle Deadlineは停止しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>133. Hint処理</h2>
+
+<pre>
+Hint Request
+
+↓
+
+Auth
+
+↓
+
+requestId
+
+↓
+
+Game Status確認
+
+↓
+
+Dailyならdaily_controls確認
+
+↓
+
+使用済みCategory？
+
+YES
+→ Reject
+
+
+NO
+↓
+
+Answerから対象値取得
+
+↓
+
+usedHints追加
+
+↓
+
+stateVersion++
+
+↓
+
+Storage保存
+
+↓
+
+公開可能なHintだけ返す
+</pre>
+
+<hr>
+
+<h2>134. Hint Response</h2>
+
+<div class="example">
+
+<pre>
+{
+    "hint": "cost",
+    "value": 7
+}
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+Hint ResponseへAnswer Card IDや
+Answer Card全体を含めない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>135. Surrender処理</h2>
+
+<pre>
+Surrender Request
+
+↓
+
+Auth
+
+↓
+
+requestId
+
+↓
+
+Game Status確認
+
+↓
+
+Dailyならdaily_controls確認
+
+↓
+
+Normal Surrender可能？
+
+↓
+
+status = ended
+
+endReason = surrender
+
+↓
+
+Answer公開可能
+
+↓
+
+stateVersion++
+
+↓
+
+Storage保存
+
+↓
+
+Result
+</pre>
+
+<div class="warning">
+
+<p>
+Dailyがsuspendedの場合は
+Surrender成立前にDAILY_SUSPENDEDを返す。
+</p>
+
+</div>
+
+<hr>
+
+<h2>136. Battle Exit</h2>
+
+<pre>
+Leave Request
+
+↓
+
+Auth
+
+↓
+
+requestId
+
+↓
+
+playing確認
+
+↓
+
+Leaving Player = Loser
+
+Other Player = Winner
+
+↓
+
+status = ended
+
+↓
+
+stateVersion++
+
+↓
+
+Storage
+
+↓
+
+Result Broadcast
+</pre>
+
+<div class="rule">
+
+<p>
+明示Exitに30秒Reconnect Graceなし。
+</p>
+
+</div>
+
+<hr>
+
+<h2>137. Battle Correct Guess</h2>
+
+<pre>
+Guess成立
+
+↓
+
+guessedCardId === answerCardId
+
+↓
+
+History追加
+
+↓
+
+Guess Count更新
+
+↓
+
+Winner確定
+
+↓
+
+status = ended
+
+↓
+
+Answer公開可能
+
+↓
+
+resultCleanupAt
+= 5分後
+
+↓
+
+stateVersion++
+
+↓
+
+Result Snapshot
+</pre>
+
+<hr>
+
+<h2>138. Battle Draw</h2>
+
+<pre>
+Player 1 = 10
+
+Player 2 = 10
+
+↓
+
+Correctなし
+
+↓
+
+Draw
+
+↓
+
+status = ended
+
+↓
+
+Answer公開
+</pre>
+
+<hr>
+
+<h2>139. Battle History</h2>
+
+<div class="rule">
+
+<p>
+Server内部では誰のGuessか識別してよい。
+</p>
+
+<p>
+Client表示用の共有Historyでは
+Player Name / Player Colorを表示しない仕様を維持する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>140. Result Data</h2>
+
+<pre>
+status
+endReason
+guessCount
+usedHints
+elapsedTime
+answerCard
+result
+history
+data_version_id
+version_code
+</pre>
+
+<div class="warning">
+
+<p>
+上記はNormal End時の概念。
+</p>
+
+<p>
+Daily suspendedでは
+answerCardを含むNormal Result Dataを生成しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>141. Battle Time集計</h2>
+
+<div class="rule">
+
+<p>
+各Playerについて
+<strong>自身のTurnで実際に消費したTimeの合計</strong>
+をResult用Timeとする。
+</p>
+
+</div>
+
+<pre>
+Player A
+
+Turn 1 = 8秒
+
+Turn 2 = 15秒
+
+Turn 3 = 20秒
+
+↓
+
+43秒
+</pre>
+
+<p>
+Timeout Turnは120秒として加算する。
+</p>
+
+<hr>
+
+<h2>142. Turn消費時間</h2>
+
+<pre>
+turnElapsed
+=
+min(
+    responseTime,
+    deadline
+)
+-
+turnStartedAt
+</pre>
+
+<div class="warning">
+
+<p>
+Client自己申告Timeを使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>143. Solo / Daily / Challenge経過時間</h2>
+
+<pre>
+startedAt
+
+endedAt
+
+↓
+
+elapsedTime
+</pre>
+
+<div class="rule">
+
+<p>
+Page Reload・一時Disconnect中も
+Gameが継続している限り経過時間へ含む。
+</p>
+
+</div>
+
+<hr>
+
+<h2>144. User Account</h2>
+
+<div class="rule">
+
+<strong>
+初期版ではLogin / Player Accountなし。
+</strong>
+
+</div>
+
+<ul>
+<li>勝率保存なし。</li>
+<li>戦績保存なし。</li>
+<li>Rankingなし。</li>
+<li>Daily Streakなし。</li>
+<li>Past Result一覧なし。</li>
+</ul>
+
+<hr>
+
+<h2>145. gameId</h2>
+
+<div class="rule">
+
+<p>
+Solo / Daily / ChallengeのGame IDは
+推測困難なOpaque IDとする。
+</p>
+
+<p>
+128bit以上のRandom性を持つ識別子を基本とする。
+</p>
+
+</div>
+
+<p>
+Battle Room IDとは別物。
+</p>
+
+<hr>
+
+<h2>146. IDとToken</h2>
+
+<table>
+
+<tr>
+<th>値</th>
+<th>Secret</th>
+<th>用途</th>
+</tr>
+
+<tr>
+<td>gameId</td>
+<td>基本的にSecretではない</td>
+<td>Game識別</td>
+</tr>
+
+<tr>
+<td>roomId</td>
+<td>Secretではない</td>
+<td>Battle Room識別</td>
+</tr>
+
+<tr>
+<td>sessionToken</td>
+<td>Secret</td>
+<td>Game操作認証</td>
+</tr>
+
+<tr>
+<td>reconnectToken</td>
+<td>Secret</td>
+<td>Battle Reconnect / 操作認証</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>147. Public URL</h2>
+
+<div class="warning">
+
+<pre>
+避ける：
+
+https://example.com/game/xxxx
+?sessionToken=SECRET
+</pre>
+
+</div>
+
+<p>
+共有可能URLとSecret Tokenを分離する。
+</p>
+
+<hr>
+
+<h2>148. Daily Share URL</h2>
+
+<div class="rule">
+
+<ul>
+<li>Public Daily Page URLのみ。</li>
+<li>sessionTokenなし。</li>
+<li>answerCardIdなし。</li>
+<li>Answer復元情報なし。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>149. Old Data Version保持</h2>
+
+<div class="box">
+
+<p>
+Current Version変更後も、
+開始済み通常Gameは旧
+<code>data_version_id</code>
+を参照する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+旧Versionを即時削除しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>150. Published Version</h2>
+
+<div class="rule">
+
+<p>
+Published Data Versionは不変Snapshotとして扱う。
+</p>
+
+<p>
+修正する場合は新しいVersionを生成する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>151. Current Version</h2>
+
+<div class="box">
+
+<p>
+Currentは
+「新規Gameが使用するPublished Version」を示す。
+</p>
+
+</div>
+
+<pre>
+Published A
+Published B
+Published C
+
+Current = B
+</pre>
+
+<div class="rule">
+
+<p>
+Current変更は独立した運営操作とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>152. Current変更処理</h2>
+
+<pre>
+Admin Current Change
+
+↓
+
+Target VersionがPublishedか確認
+
+↓
+
+Current更新
+
+↓
+
+現在のdaily_key取得
+
+↓
+
+daily_controlsをsuspendedへ
+
+↓
+
+admin_audit_logs
+
+↓
+
+成功
+</pre>
+
+<div class="rule">
+
+<p>
+可能な範囲でCurrent変更・Daily Suspend・Audit Logを
+一体的に成立させる。
+</p>
+
+</div>
+
+<hr>
+
+<h2>153. Search Index準備</h2>
+
+<div class="rule">
+
+<p>
+VersionをCurrentへ変更する前に
+対応するSearch Indexが
+利用可能であることを確認する。
+</p>
+
+</div>
+
+<pre>
+Version Publish
+
+↓
+
+Search Index Ready
+
+↓
+
+Current Change
+
+↓
+
+Current Daily Suspend
+</pre>
+
+<p>
+詳細手順は08を正とする。
+</p>
+
+<hr>
+
+<h2>154. Maintenance</h2>
+
+<div class="box">
+
+<p>
+運営Maintenance状態は
+<code>operator_settings</code>
+等からServerが確認する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>操作</th>
+<th>Maintenance時</th>
+</tr>
+
+<tr>
+<td>新規Game Create</td>
+<td>Block</td>
+</tr>
+
+<tr>
+<td>Challenge Join</td>
+<td>Block</td>
+</tr>
+
+<tr>
+<td>Battle Join</td>
+<td>Block</td>
+</tr>
+
+<tr>
+<td>未開始Game Start</td>
+<td>Block</td>
+</tr>
+
+<tr>
+<td>すでにPlaying中のGame</td>
+<td>原則継続</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+初期版ではMaintenance変更による
+進行中Gameの強制Killを行わない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>155. Operator Settings</h2>
+
+<div class="box">
+
+<p>
+初期版の運営側変更可能設定は
+07で定義した範囲に限定する。
+</p>
+
+</div>
+
+<pre>
+contactUrl
+
+maintenance
+</pre>
+
+<p>
+Game Ruleそのものを
+管理画面から自由変更する構造にはしない。
+</p>
+
+<hr>
+
+<h2>156. Admin Audit</h2>
+
+<div class="rule">
+
+<p>
+Current変更、
+Daily Suspend、
+Maintenance変更等の重要操作は
+<code>admin_audit_logs</code>
+へ記録する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>157. D1 Error Logs</h2>
+
+<div class="box">
+
+<p>
+Error調査用Dataは
+<code>error_logs</code>
+へ保存する。
+</p>
+
+</div>
+
+<pre>
+error_id
+error_code
+occurred_at
+data_version_id
+game_mode
+game_id
+room_id
+answer_card_id
+guessed_card_id
+invalid_field
+request_id
+</pre>
+
+<div class="warning">
+
+<p>
+Userへは必要最低限の安全情報だけを返す。
+</p>
+
+</div>
+
+<hr>
+
+<h2>158. WordPressとの独立性</h2>
+
+<div class="rule">
+
+<ul>
+<li>WordPress PHPへGame Stateを保存しない。</li>
+<li>WordPress DBへGame Stateを保存しない。</li>
+<li>WordPress LoginをGame必須条件にしない。</li>
+<li>Shado Guesser単体で動作可能。</li>
+<li>WordPressは将来の外側Siteとして利用可能。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>159. Routing</h2>
+
+<pre>
+Browser
+
+↓
+
+Cloudflare
+
+├─ Static URL
+│      ↓
+│    Pages
+│
+├─ /api/*
+│      ↓
+│    Worker
+│
+└─ WebSocket
+       ↓
+     Worker
+       ↓
+     Durable Object
+</pre>
+
+<hr>
+
+<h2>160. 実装定数</h2>
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>初期値</th>
+</tr>
+
+<tr>
+<td>Rotation通常Pack数</td>
+<td>6</td>
+</tr>
+
+<tr>
+<td>通常Guess上限</td>
+<td>10</td>
+</tr>
+
+<tr>
+<td>Battle Guess上限</td>
+<td>各10</td>
+</tr>
+
+<tr>
+<td>Battle Turn</td>
+<td>120秒</td>
+</tr>
+
+<tr>
+<td>Battle Reconnect Grace</td>
+<td>30秒</td>
+</tr>
+
+<tr>
+<td>Challenge Guesser Reconnect</td>
+<td>30秒</td>
+</tr>
+
+<tr>
+<td>Battle Waiting TTL</td>
+<td>30分</td>
+</tr>
+
+<tr>
+<td>Battle Result Retention</td>
+<td>5分</td>
+</tr>
+
+<tr>
+<td>Solo / Daily Idle TTL</td>
+<td>24時間</td>
+</tr>
+
+<tr>
+<td>Solo / Daily Result Retention</td>
+<td>30分</td>
+</tr>
+
+<tr>
+<td>Challenge Result Retention</td>
+<td>30分</td>
+</tr>
+
+<tr>
+<td>Daily Reset</td>
+<td>JST 05:00</td>
+</tr>
+
+<tr>
+<td>Room ID</td>
+<td>6文字 A-Z / 0-9</td>
+</tr>
+
+<tr>
+<td>Suggestion</td>
+<td>最大10件</td>
+</tr>
+
+<tr>
+<td>Custom最低Card</td>
+<td>31枚</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>161. Server Config</h2>
+
+<pre>
+SG_SERVER_CONFIG
+
+rotationPackCount
+maxGuessCount
+battleTurnSeconds
+battleReconnectGraceSeconds
+challengeReconnectGraceSeconds
+roomWaitingTtl
+battleResultRetention
+gameIdleTtl
+gameResultRetention
+dailyResetHourJst
+customMinimumCards
+</pre>
+
+<div class="rule">
+
+<p>
+同じ定数をCodeの多数箇所へ直書きしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>162. Invalid Game State</h2>
+
+<div class="warning">
+
+<p>
+以下を検出した場合はNormal Gameとして継続しない。
+</p>
+
+<ul>
+<li>Answerが回答範囲外。</li>
+<li>存在しないdata_version_id。</li>
+<li>HistoryとGuess Countが矛盾。</li>
+<li>Battle playingなのにCurrent Turnなし。</li>
+<li>Battle playingなのにDeadlineなし。</li>
+<li>Battleに3人以上。</li>
+<li>Timeout Random Candidateが0。</li>
+<li>Daily active Gameなのにdaily_configsが不正。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>163. Server Error時の勝敗</h2>
+
+<div class="rule">
+
+<p>
+Server / Data Errorによって判定不能の場合、
+どちらかのPlayerを勝手にLose扱いしない。
+</p>
+
+</div>
+
+<pre>
+status = error
+</pre>
+
+<p>
+として停止し、
+安全なError Screenへ移行する。
+</p>
+
+<hr>
+
+<h2>164. 通信失敗との分離</h2>
+
+<table>
+
+<tr>
+<th>状態</th>
+<th>処理</th>
+</tr>
+
+<tr>
+<td>Response受信失敗</td>
+<td>Server State再確認</td>
+</tr>
+
+<tr>
+<td>requestId Retry</td>
+<td>前回Result</td>
+</tr>
+
+<tr>
+<td>Data Error</td>
+<td>Game error</td>
+</tr>
+
+<tr>
+<td>一時Disconnect</td>
+<td>Reconnect</td>
+</tr>
+
+<tr>
+<td>Daily Suspend</td>
+<td>Daily Stop Screen</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>165. Reconnect後のClient</h2>
+
+<pre>
+Old Client State
+
+↓
+
+破棄 / 上書き
+
+↓
+
+Complete Server Snapshot
+
+↓
+
+UI再構築
+</pre>
+
+<div class="rule">
+
+<p>
+古いClient Historyへ
+不足差分だけを推測追加しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>166. 複数Tab</h2>
+
+<div class="box">
+
+<p>
+同一Sessionを複数Tabで操作することを
+主要利用方法として保証しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+複数TabからRequestが到着しても
+DO State・Auth・requestId・Turn Validationにより
+正式Stateが破損しない構造とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>167. State保存粒度</h2>
+
+<div class="rule">
+
+<p>
+Guess / Hint / READY等、
+正式なGame State変更が成立するごとに
+Storageへ保存する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+複数Guess分をMemoryへ蓄積して
+後から一括保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>168. WebSocket Notification順序</h2>
+
+<pre>
+State Change
+
+↓
+
+Storage Save
+
+↓
+
+Broadcast
+</pre>
+
+<div class="rule">
+
+<p>
+WebSocket通知だけ成功し、
+Storage Stateが古いままになる構造を避ける。
+</p>
+
+</div>
+
+<hr>
+
+<h2>169. Hibernation復帰</h2>
+
+<pre>
+WebSocket Event
+
+↓
+
+DO Wake
+
+↓
+
+Storage Load
+
+↓
+
+Current State復元
+
+↓
+
+処理
+
+↓
+
+Storage Save
+
+↓
+
+Response / Broadcast
+</pre>
+
+<hr>
+
+<h2>170. WebSocket Message例</h2>
+
+<pre>
+auth
+snapshot
+ready
+guess
+leave
+surrender
+error
+ping
+</pre>
+
+<div class="notice">
+
+<p>
+最終Message名は実装時に整理可能。
+</p>
+
+</div>
+
+<hr>
+
+<h2>171. WebSocket Heartbeat</h2>
+
+<div class="rule">
+
+<p>
+Connection確認に必要な場合のみ
+軽量Heartbeatを使用する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+Game State全体を毎秒送信する用途には使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>172. Card Image</h2>
+
+<pre>
+Browser
+
+↓
+
+SG_CONFIG.imageBaseUrl
++
+image_ref
+
+↓
+
+Image Host
+</pre>
+
+<div class="rule">
+
+<p>
+WorkersをCard Image Proxyとして使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>173. Version変更時の全体フロー</h2>
+
+<pre>
+New Data
+
+↓
+
+Draft
+
+↓
+
+Validation
+
+↓
+
+Search Index生成・確認
+
+↓
+
+Published
+
+↓
+
+AdminがCurrent変更
+
+↓
+
+New Game
+→ New data_version_id
+
+Existing Solo / Challenge / Battle
+→ Old data_version_id継続
+
+Current Daily
+→ suspended
+
+↓
+
+次のDaily Server Interaction
+
+↓
+
+DAILY_SUSPENDED
+
+↓
+
+Answer非公開
+</pre>
+
+<hr>
+
+<h2>174. Daily SuspendとResult</h2>
+
+<div class="warning">
+
+<pre>
+使用しない：
+
+Daily Suspend
+
+↓
+
+status = ended
+
+↓
+
+Result
+
+↓
+
+Answer公開
+</pre>
+
+</div>
+
+<div class="rule">
+
+<pre>
+正：
+
+Daily Suspend
+
+↓
+
+status = suspended
+
+↓
+
+DAILY_SUSPENDED
+
+↓
+
+Daily Stop Screen
+
+↓
+
+Answer非公開
+</pre>
+
+</div>
+
+<hr>
+
+<h2>175. Daily SuspendとrequestId</h2>
+
+<div class="box">
+
+<p>
+Daily Guess等でrequestIdが送信された後に
+Suspendが検出された場合、
+そのGuessを通常成立させない。
+</p>
+
+</div>
+
+<pre>
+requestId = A
+
+↓
+
+Daily Control Check
+
+↓
+
+suspended
+
+↓
+
+Guessなし
+
+↓
+
+requestId Aの結果
+
+DAILY_SUSPENDED
+</pre>
+
+<div class="rule">
+
+<p>
+同じrequestId Aが再送された場合も
+新しいGuessとして成立させず
+同じ停止結果を返せる構造とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>176. MaintenanceとDaily Suspendの違い</h2>
+
+<table>
+
+<tr>
+<th>状態</th>
+<th>既存Playing Game</th>
+</tr>
+
+<tr>
+<td>Maintenance</td>
+<td>原則継続</td>
+</tr>
+
+<tr>
+<td>Daily Suspended</td>
+<td>Dailyのみ次回Server Interactionで停止</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+MaintenanceとDaily Suspendを
+同じStatusとして実装しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>177. 初期版で使用しない構成</h2>
+
+<div class="box">
+
+<ul>
+<li>常時起動Node.js Server。</li>
+<li>Render常駐Server。</li>
+<li>VPS必須構成。</li>
+<li>Redis必須構成。</li>
+<li>WordPress DBへのGame State保存。</li>
+<li>Browserだけでの正式Game判定。</li>
+<li>毎秒WebSocket Timer配信。</li>
+<li>文字入力ごとのD1 Search。</li>
+<li>Worker Image Proxy。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>178. 確定事項</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>確定仕様</th>
+</tr>
+
+<tr>
+<td>Frontend</td>
+<td>Cloudflare Pages</td>
+</tr>
+
+<tr>
+<td>API</td>
+<td>Cloudflare Workers</td>
+</tr>
+
+<tr>
+<td>Persistent Data</td>
+<td>Cloudflare D1</td>
+</tr>
+
+<tr>
+<td>Game State</td>
+<td>Durable Objects</td>
+</tr>
+
+<tr>
+<td>DO Storage</td>
+<td>SQLite-backedを基本</td>
+</tr>
+
+<tr>
+<td>Solo</td>
+<td>GameSessionDO</td>
+</tr>
+
+<tr>
+<td>Daily</td>
+<td>GameSessionDO + daily_configs + daily_controls</td>
+</tr>
+
+<tr>
+<td>Challenge</td>
+<td>ChallengeGameDO</td>
+</tr>
+
+<tr>
+<td>Battle</td>
+<td>BattleRoomDO</td>
+</tr>
+
+<tr>
+<td>Realtime</td>
+<td>2人ModeのみWebSocket</td>
+</tr>
+
+<tr>
+<td>WebSocket</td>
+<td>Hibernation利用</td>
+</tr>
+
+<tr>
+<td>Game Source of Truth</td>
+<td>Server</td>
+</tr>
+
+<tr>
+<td>Answer</td>
+<td>Normal EndまでServer側</td>
+</tr>
+
+<tr>
+<td>Judgement</td>
+<td>Server</td>
+</tr>
+
+<tr>
+<td>Internal Version</td>
+<td>data_version_id</td>
+</tr>
+
+<tr>
+<td>Public Version Code</td>
+<td>version_code</td>
+</tr>
+
+<tr>
+<td>Game Version</td>
+<td>Start時固定</td>
+</tr>
+
+<tr>
+<td>Custom Token</td>
+<td>Pack条件のみ無視</td>
+</tr>
+
+<tr>
+<td>Daily生成</td>
+<td>最初のAccess時</td>
+</tr>
+
+<tr>
+<td>Daily切替</td>
+<td>JST 05:00</td>
+</tr>
+
+<tr>
+<td>Daily Config Version</td>
+<td>生成時固定</td>
+</tr>
+
+<tr>
+<td>Daily同時生成</td>
+<td>daily_key UNIQUE</td>
+</tr>
+
+<tr>
+<td>Daily正常再挑戦</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>Current変更</td>
+<td>Current DailyをSuspend</td>
+</tr>
+
+<tr>
+<td>Rollback</td>
+<td>Current DailyをSuspend</td>
+</tr>
+
+<tr>
+<td>Publishのみ</td>
+<td>DailyをSuspendしない</td>
+</tr>
+
+<tr>
+<td>Daily Suspend Status</td>
+<td>suspended</td>
+</tr>
+
+<tr>
+<td>DAILY_SUSPENDED</td>
+<td>専用停止Response</td>
+</tr>
+
+<tr>
+<td>Daily Suspend Result</td>
+<td>Normal Resultなし</td>
+</tr>
+
+<tr>
+<td>Daily Suspend Answer</td>
+<td>非公開</td>
+</tr>
+
+<tr>
+<td>Daily Suspended再挑戦</td>
+<td>当日不可</td>
+</tr>
+
+<tr>
+<td>Daily再開</td>
+<td>次のdaily_keyから可能</td>
+</tr>
+
+<tr>
+<td>Challenge Hint</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>Challenge Guesser Surrender</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>Setter Leave</td>
+<td>Answer設定後はGame継続</td>
+</tr>
+
+<tr>
+<td>Challenge Guesser Disconnect</td>
+<td>30秒</td>
+</tr>
+
+<tr>
+<td>Battle Room ID</td>
+<td>6文字 A-Z / 0-9</td>
+</tr>
+
+<tr>
+<td>Battle人数</td>
+<td>2人</td>
+</tr>
+
+<tr>
+<td>Spectator</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>Battle Start</td>
+<td>Both READY</td>
+</tr>
+
+<tr>
+<td>First Player</td>
+<td>Server Random</td>
+</tr>
+
+<tr>
+<td>Turn</td>
+<td>Alternating</td>
+</tr>
+
+<tr>
+<td>Turn Time</td>
+<td>120秒</td>
+</tr>
+
+<tr>
+<td>Deadline Source</td>
+<td>Server Time</td>
+</tr>
+
+<tr>
+<td>Deadline後Guess</td>
+<td>Timeout優先</td>
+</tr>
+
+<tr>
+<td>Timeout Guess</td>
+<td>Answer除外Random Guess</td>
+</tr>
+
+<tr>
+<td>Timeout Duplicate</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>Countdown</td>
+<td>Client Display</td>
+</tr>
+
+<tr>
+<td>毎秒WebSocket</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>Battle Reconnect</td>
+<td>30秒</td>
+</tr>
+
+<tr>
+<td>Explicit Exit</td>
+<td>即敗北</td>
+</tr>
+
+<tr>
+<td>Reconnect Token</td>
+<td>Browser Raw / Server Hash</td>
+</tr>
+
+<tr>
+<td>Resume Snapshot</td>
+<td>Complete Snapshot</td>
+</tr>
+
+<tr>
+<td>stateVersion</td>
+<td>Monotonic</td>
+</tr>
+
+<tr>
+<td>Old stateVersion</td>
+<td>Client Ignore</td>
+</tr>
+
+<tr>
+<td>Important Operation</td>
+<td>requestId</td>
+</tr>
+
+<tr>
+<td>requestId Retry</td>
+<td>前回Result</td>
+</tr>
+
+<tr>
+<td>API URL</td>
+<td>Config化</td>
+</tr>
+
+<tr>
+<td>WebSocket URL</td>
+<td>Config化</td>
+</tr>
+
+<tr>
+<td>Image URL</td>
+<td>Config化</td>
+</tr>
+
+<tr>
+<td>Solo / Daily Resume</td>
+<td>可能。ただしDaily Suspend時除く</td>
+</tr>
+
+<tr>
+<td>Solo / Daily Idle TTL</td>
+<td>24時間</td>
+</tr>
+
+<tr>
+<td>Solo / Daily End Retention</td>
+<td>30分</td>
+</tr>
+
+<tr>
+<td>Challenge End Retention</td>
+<td>30分</td>
+</tr>
+
+<tr>
+<td>Battle Waiting TTL</td>
+<td>30分</td>
+</tr>
+
+<tr>
+<td>Battle End Retention</td>
+<td>5分</td>
+</tr>
+
+<tr>
+<td>Deadline / TTL管理</td>
+<td>DO Alarm</td>
+</tr>
+
+<tr>
+<td>Battle Result Time</td>
+<td>自身のTurn消費時間合計</td>
+</tr>
+
+<tr>
+<td>Timeout Turn Time</td>
+<td>120秒</td>
+</tr>
+
+<tr>
+<td>User Account</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>Persistent Player Result</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>Old Data Version</td>
+<td>初期版では自動削除なし</td>
+</tr>
+
+<tr>
+<td>Card Image</td>
+<td>BrowserからImage Hostへ直接</td>
+</tr>
+
+<tr>
+<td>Maintenance</td>
+<td>新規開始Block・既存Playing継続</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>179. 07・08との責務分離</h2>
+
+<table>
+
+<tr>
+<th>設計書</th>
+<th>責務</th>
+</tr>
+
+<tr>
+<td>06</td>
+<td>Server / API / D1 / DO / WebSocket / Game State</td>
+</tr>
+
+<tr>
+<td>07</td>
+<td>Admin / Current変更 / Daily停止 / Maintenance / Audit</td>
+</tr>
+
+<tr>
+<td>08</td>
+<td>Source Data取得 / Import / Validation / Publish / Search Index生成</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+Daily Suspendの運営上の意味は07、
+Serverでの実際の停止判定は06で扱う。
+</p>
+
+</div>
+
+<hr>
+
+<h2>180. 実装時調整事項</h2>
+
+<div class="notice">
+
+<ul>
+<li>Durable Object Classの最終名。</li>
+<li>DO内部SQLite Schema。</li>
+<li>Worker → DOのRPC / fetch分担。</li>
+<li>API Endpointの最終URL。</li>
+<li>WebSocket Message名。</li>
+<li>Heartbeatの必要性。</li>
+<li>Token文字列表現。</li>
+<li>gameId形式。</li>
+<li>errorId形式。</li>
+<li>HTTP Body Maximum Size。</li>
+<li>Rate Limit具体値。</li>
+<li>Cloudflare Binding名。</li>
+<li>Development / Production Domain。</li>
+<li>daily_controlsのIndex。</li>
+<li>Current変更とDaily Suspendを成立させる具体的Transaction構成。</li>
+</ul>
+
+<p>
+これらは本書で確定した
+Game Rule・Source of Truth・Data Version・Daily Suspend・
+Deadline・Reconnect等を変更せず調整する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>181. 最終方針</h2>
+
+<div class="rule">
+
+<strong>
+「Browserは表示と入力、ServerはGameの真実」
+</strong>
+
+</div>
+
+<pre>
+Browser
+
+Input
+Display
+Suggestion Search
+Countdown
+
+
+        ↓
+
+
+Server
+
+Answer
+Guess Count
+Judgement
+Hint
+Turn
+Deadline
+READY
+Reconnect
+Win / Lose
+Daily State
+Game End
+
+
+        ↓
+
+
+D1 / Durable Objects
+
+Official Data
+Official State
+</pre>
+
+<div class="rule">
+
+<p>
+この構成により、
+Solo / Daily / Challenge / Battleを
+同一のServer原則で管理する。
+</p>
+
+</div>
+
+<hr>
+
+<p class="small">
+Shado Guesser 基本設計書<br>
+06 サーバー・Cloudflare設計<br><br>
+©Shado Guesser
+</p>
+
+</body>
+</html>

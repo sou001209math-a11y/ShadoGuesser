@@ -1,0 +1,2918 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Shado Guesser 基本設計書 - 05-02 入力UI</title>
+
+<style>
+
+body{
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    color:#222;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+}
+
+h1{
+    border-bottom:4px solid #3f51b5;
+    padding-bottom:10px;
+}
+
+h2{
+    margin-top:45px;
+    border-left:8px solid #3f51b5;
+    padding-left:12px;
+}
+
+h3{
+    margin-top:30px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th,
+td{
+    border:1px solid #cccccc;
+    padding:10px;
+    vertical-align:top;
+}
+
+th{
+    background:#3f51b5;
+    color:white;
+}
+
+.box{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+}
+
+.notice{
+    background:#fff8e1;
+    border-left:6px solid #ffc107;
+    padding:15px;
+    margin-top:20px;
+}
+
+.rule{
+    background:#e8eaf6;
+    border-left:6px solid #3f51b5;
+    padding:15px;
+    margin-top:20px;
+}
+
+.warning{
+    background:#ffebee;
+    border-left:6px solid #d32f2f;
+    padding:15px;
+    margin-top:20px;
+}
+
+.example{
+    background:#e8f5e9;
+    border-left:6px solid #4caf50;
+    padding:15px;
+    margin-top:20px;
+}
+
+pre{
+    background:#222;
+    color:#f5f5f5;
+    padding:20px;
+    border-radius:8px;
+    overflow:auto;
+    line-height:1.6;
+}
+
+code{
+    background:#eeeeee;
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.small{
+    color:#777;
+    font-size:0.9em;
+}
+
+@media(max-width:700px){
+
+    body{
+        padding:18px;
+    }
+
+    table{
+        font-size:0.88em;
+    }
+
+    th,
+    td{
+        padding:7px;
+    }
+
+    pre{
+        padding:12px;
+        font-size:0.82em;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Shado Guesser 基本設計書</h1>
+
+<p>
+<strong>05-02：入力UI</strong>
+</p>
+
+<p>
+本設計書では、
+Shado Guesserにおいてプレイヤーが
+回答するカードを指定するための入力UI、
+カードサジェスト、
+カード選択、
+回答ボタン、
+回答要求、
+および回答確定までの基本操作を定義する。
+</p>
+
+<p>
+カード検索には、
+ゲーム開始時に固定されたData Versionに対応する
+Version別静的Search Indexを使用し、
+文字入力ごとの検索はブラウザ内で実行する。
+</p>
+
+<hr>
+
+<h2>1. 目的</h2>
+
+<div class="box">
+
+<p>
+入力UIは、
+プレイヤーがカード名を入力し、
+サジェスト候補から正式なカードを選択した後、
+明示的に回答を確定するためのUIである。
+</p>
+
+<p>
+長いカード名を完全入力する必要がないよう、
+カード名の一部分から候補を検索できる構造とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>基本方針</strong>
+
+<ul>
+<li>カード名を入力する。</li>
+<li>検索はブラウザ内で行う。</li>
+<li>現在のゲームで回答可能なカードだけ検索対象とする。</li>
+<li>候補から正式なカードを選択する。</li>
+<li>選択時にcard_idを保持する。</li>
+<li>候補を選んだだけでは回答しない。</li>
+<li>回答は「回答する」ボタンのみで確定する。</li>
+<li>Enterキーでは回答しない。</li>
+<li>正式な回答可否・判定はサーバー側を正とする。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>2. 基本レイアウト</h2>
+
+<div class="box">
+
+<p>
+入力UIは回答履歴より上に配置する。
+</p>
+
+</div>
+
+<pre>
+┌────────────────────────────────────────────┐
+│                                            │
+│  [ カード名を入力                       ]  │
+│                                            │
+│  ┌──────────────────────────────────────┐  │
+│  │ サジェスト候補                       │  │
+│  │                                      │  │
+│  │ カードA                              │  │
+│  │ カードB                              │  │
+│  │ カードC                              │  │
+│  └──────────────────────────────────────┘  │
+│                                            │
+│                [ 回答する ]                │
+│                                            │
+└────────────────────────────────────────────┘
+</pre>
+
+<div class="notice">
+
+<p>
+サジェスト欄は常時表示せず、
+検索条件を満たし候補が存在する場合に表示する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>3. カード名入力欄</h2>
+
+<div class="box">
+
+<p>
+回答候補を検索するための
+テキスト入力欄を1つ設置する。
+</p>
+
+</div>
+
+<pre>
+[ カード名を入力                       ]
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>入力形式はテキスト。</li>
+<li>カード名の一部分のみの入力を許可。</li>
+<li>完全一致入力を要求しない。</li>
+<li>入力文字列からサジェストを生成。</li>
+<li>カード名以外を検索する専用入力欄は設置しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>4. Search Index</h2>
+
+<div class="box">
+
+<p>
+サジェストには
+Version別の静的Search Indexを使用する。
+</p>
+
+</div>
+
+<pre>
+D1
+
+↓
+
+Data Version Publish時
+
+↓
+
+card-search-index-[version_code].json
+
+↓
+
+Cloudflare Pages等から静的配信
+
+↓
+
+Browser
+
+↓
+
+カード名検索
+</pre>
+
+<div class="rule">
+
+<p>
+文字を入力するたびに
+Worker / D1へ検索Requestを送らない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>5. Versionの扱い</h2>
+
+<div class="box">
+
+<p>
+ゲーム内部では
+<code>data_version_id</code>
+を固定する。
+</p>
+
+<p>
+BrowserがSearch Indexを取得する際は、
+そのVersionに対応する
+<code>version_code</code>
+を使用する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<pre>
+data_version_id
+
+→ Server / D1 / Durable Objects内部
+
+
+version_code
+
+→ Browserへ公開可能なVersion表記
+→ Search Index filename
+</pre>
+
+</div>
+
+<div class="example">
+
+<pre>
+ゲーム
+
+data_version_id = 内部Version A
+
+version_code = 2026-07-28-01
+
+↓
+
+Browser
+
+card-search-index-2026-07-28-01.json
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+<code>dataVersion</code>
+という曖昧な名称は原則使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>6. ゲーム途中のVersion変更禁止</h2>
+
+<div class="rule">
+
+<p>
+ゲーム開始後にCurrent Versionが変更されても、
+進行中ゲームのSearch Indexを
+新Versionへ変更しない。
+</p>
+
+</div>
+
+<pre>
+ゲーム開始
+
+data_version_id = A
+version_code = A
+
+↓
+
+Current = Bへ変更
+
+↓
+
+進行中ゲーム
+
+Version Aを継続使用
+
+
+新規ゲーム
+
+Version Bを使用
+</pre>
+
+<div class="notice">
+
+<p>
+DailyについてCurrent変更が発生した場合は、
+07で定義したDaily停止仕様が別途適用される。
+</p>
+
+</div>
+
+<hr>
+
+<h2>7. Search Indexの公開項目</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>用途</th>
+</tr>
+
+<tr>
+<td><code>card_id</code></td>
+<td>正式なカード選択</td>
+</tr>
+
+<tr>
+<td><code>name</code></td>
+<td>カード名検索</td>
+</tr>
+
+<tr>
+<td><code>class</code></td>
+<td>対象範囲Filter</td>
+</tr>
+
+<tr>
+<td><code>type</code></td>
+<td>対象範囲Filter</td>
+</tr>
+
+<tr>
+<td><code>card_set_id</code></td>
+<td>対象範囲Filter</td>
+</tr>
+
+<tr>
+<td><code>rarity</code></td>
+<td>対象範囲Filter</td>
+</tr>
+
+<tr>
+<td><code>is_token</code></td>
+<td>Token対象判定</td>
+</tr>
+
+</table>
+
+</div>
+
+<div class="warning">
+
+<p>
+サジェストに不要な秘密情報や
+ゲームの正解情報を含めない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>8. Search Indexへ原則含めない情報</h2>
+
+<div class="box">
+
+<ul>
+<li>skill_text。</li>
+<li>flavour_text。</li>
+<li>atk。</li>
+<li>life。</li>
+<li>cost。</li>
+<li>tribes。</li>
+<li>keywords。</li>
+<li>正解card_id。</li>
+<li>Game Session情報。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>9. 正解情報との分離</h2>
+
+<div class="warning">
+
+<ul>
+<li>正解card_idをSearch Indexへ記録しない。</li>
+<li>正解card_idをHTMLへ埋め込まない。</li>
+<li>ゲーム開始時に正解カードをBrowserへ送らない。</li>
+<li>Browserだけで正解判定できる構造にしない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>10. 回答対象範囲</h2>
+
+<div class="box">
+
+<p>
+サジェストへ表示するカードは、
+現在のゲームで回答可能なカードのみとする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>
+回答対象範囲 ＝ サジェスト対象範囲
+</strong>
+
+</div>
+
+<pre>
+Version別Search Index
+
+↓
+
+ゲーム開始時の対象範囲条件
+
+↓
+
+回答可能カード集合
+
+↓
+
+カード名検索
+
+↓
+
+サジェスト
+</pre>
+
+<hr>
+
+<h2>11. 対象外カード</h2>
+
+<div class="warning">
+
+<p>
+カード名が入力文字列に一致しても、
+現在のゲーム対象外であれば
+サジェストへ表示しない。
+</p>
+
+</div>
+
+<p>
+さらに、
+改変されたClientから対象外card_idが送信された場合も
+Server側で拒否する。
+</p>
+
+<hr>
+
+<h2>12. CustomとToken</h2>
+
+<div class="box">
+
+<p>
+CustomモードでBrowser側の回答可能集合を生成する場合も、
+02・04で定義したToken例外を適用する。
+</p>
+
+</div>
+
+<h3>通常カード</h3>
+
+<pre>
+class
+AND
+card_set_id
+AND
+rarity
+AND
+type
+</pre>
+
+<h3>Token</h3>
+
+<pre>
+include_tokens = true
+
+AND
+
+class
+
+AND
+
+rarity
+
+AND
+
+type
+
+
+card_set_id Filter
+→ 適用しない
+</pre>
+
+<div class="rule">
+
+<p>
+Browser側の絞り込みはUI用であり、
+Serverでも正式に再検証する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>13. モード別検索範囲</h2>
+
+<table>
+
+<tr>
+<th>モード</th>
+<th>サジェスト対象</th>
+</tr>
+
+<tr>
+<td>Solo</td>
+<td>ゲーム開始時に確定した回答範囲</td>
+</tr>
+
+<tr>
+<td>Daily</td>
+<td>そのdaily_keyに設定された回答範囲</td>
+</tr>
+
+<tr>
+<td>2人出題</td>
+<td>Challenge開始時に確定した回答範囲</td>
+</tr>
+
+<tr>
+<td>Battle</td>
+<td>Battle開始時に確定した回答範囲</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>14. 部分一致検索</h2>
+
+<div class="rule">
+
+<p>
+検索対象はカード名
+<code>name</code>
+とする。
+</p>
+
+<p>
+前方一致だけではなく、
+カード名に入力文字列が含まれているかで検索する。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+カード名：
+
+慈愛の凛華・オルテニア
+
+
+入力：
+
+オルテ
+
+
+↓
+
+候補に表示
+</pre>
+
+</div>
+
+<hr>
+
+<h2>15. サジェスト開始条件</h2>
+
+<table>
+
+<tr>
+<th>入力文字数</th>
+<th>検索</th>
+</tr>
+
+<tr>
+<td>0文字</td>
+<td>しない</td>
+</tr>
+
+<tr>
+<td>1文字</td>
+<td>しない</td>
+</tr>
+
+<tr>
+<td>2文字以上</td>
+<td>Browser内検索</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<strong>検索開始：2文字以上</strong>
+
+</div>
+
+<hr>
+
+<h2>16. サジェスト表示数</h2>
+
+<div class="rule">
+
+<strong>
+最大10件
+</strong>
+
+</div>
+
+<p>
+11件以上一致しても
+同時表示は10件までとする。
+</p>
+
+<hr>
+
+<h2>17. かな・読み仮名変換</h2>
+
+<div class="rule">
+
+<ul>
+<li>ひらがな→カタカナ自動変換検索なし。</li>
+<li>カタカナ→ひらがな自動変換検索なし。</li>
+<li>漢字の読み仮名検索なし。</li>
+<li>読み仮名専用データなし。</li>
+</ul>
+
+</div>
+
+<div class="example">
+
+<table>
+
+<tr>
+<th>カード名</th>
+<th>入力</th>
+<th>結果</th>
+</tr>
+
+<tr>
+<td>慈愛の凛華・オルテニア</td>
+<td>オルテ</td>
+<td>一致</td>
+</tr>
+
+<tr>
+<td>慈愛の凛華・オルテニア</td>
+<td>慈愛</td>
+<td>一致</td>
+</tr>
+
+<tr>
+<td>慈愛の凛華・オルテニア</td>
+<td>おるて</td>
+<td>自動変換しない</td>
+</tr>
+
+<tr>
+<td>慈愛の凛華・オルテニア</td>
+<td>じあい</td>
+<td>読み仮名変換しない</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>18. サジェスト候補の選択</h2>
+
+<div class="box">
+
+<p>
+候補をクリックまたはタップすると、
+そのカードを正式な選択カードとする。
+</p>
+
+</div>
+
+<pre>
+入力
+
+[ オルテ                              ]
+
+
+候補
+
+┌─────────────────────────────────────┐
+│ 慈愛の凛華・オルテニア             │ ← 選択
+├─────────────────────────────────────┤
+│ その他の候補                       │
+└─────────────────────────────────────┘
+
+
+↓
+
+選択後
+
+[ 慈愛の凛華・オルテニア             ]
+
+selectedCardId = "..."
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>入力欄へ正式カード名を反映。</li>
+<li>selectedCardIdへcard_idを保存。</li>
+<li>card_idは文字列として扱う。</li>
+<li>候補選択のみでは回答しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>19. selectedCardId</h2>
+
+<div class="box">
+
+<p>
+回答対象カードの正式な識別には
+入力欄の文字列ではなく
+<code>selectedCardId</code>
+を使用する。
+</p>
+
+</div>
+
+<pre>
+inputValue
+
+"慈愛の凛華・オルテニア"
+
+
+selectedCardId
+
+"10201110"
+</pre>
+
+<div class="rule">
+
+<p>
+Serverへ送信する正式なカード識別値は
+selectedCardIdのcard_idとする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>20. 完全一致手入力</h2>
+
+<div class="warning">
+
+<p>
+プレイヤーが正式カード名を完全に手入力しても、
+サジェスト候補から選択していない場合は
+回答可能状態にしない。
+</p>
+
+</div>
+
+<pre>
+入力欄：
+
+慈愛の凛華・オルテニア
+
+
+selectedCardId：
+
+null
+
+
+↓
+
+回答不可
+</pre>
+
+<div class="rule">
+
+<p>
+文字列一致ではなく
+card_id選択を回答条件とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>21. 選択後の文字編集</h2>
+
+<div class="box">
+
+<p>
+カード選択後に入力文字列が変更された場合は、
+選択状態を解除する。
+</p>
+
+</div>
+
+<pre>
+候補選択
+
+selectedCardId = "10201110"
+
+
+↓
+
+文字を編集
+
+
+selectedCardId = null
+</pre>
+
+<div class="rule">
+
+<p>
+再度サジェスト候補から選択するまで
+回答不可とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>22. 回答ボタン</h2>
+
+<div class="box">
+
+<p>
+回答確定用の専用ボタンを設置する。
+</p>
+
+</div>
+
+<pre>
+[ 慈愛の凛華・オルテニア             ]
+
+                [ 回答する ]
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>回答は「回答する」ボタン押下時のみ。</li>
+<li>候補選択だけでは回答しない。</li>
+<li>文字入力だけでは回答しない。</li>
+<li>選択済みcard_idを使用する。</li>
+<li>回答処理開始直後に操作不可にする。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>23. Enterキー</h2>
+
+<div class="rule">
+
+<strong>
+Enterキーによる回答送信は禁止する。
+</strong>
+
+<ul>
+<li>Enter → 回答しない。</li>
+<li>候補選択後Enter → 回答しない。</li>
+<li>完全一致入力後Enter → 回答しない。</li>
+<li>回答は「回答する」ボタンのみ。</li>
+</ul>
+
+</div>
+
+<div class="notice">
+
+<p>
+HTML
+<code>&lt;form&gt;</code>
+を利用する場合も、
+標準Submitによって回答処理が実行されないよう制御する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>24. IME入力</h2>
+
+<div class="box">
+
+<p>
+日本語入力ではIME変換途中のKeyboard Eventが発生するため、
+composition状態を考慮する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>IME変換途中を正式な回答操作として扱わない。</li>
+<li>composition中のEnterを回答に使用しない。</li>
+<li>通常時のEnterも回答には使用しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>25. 回答可能条件</h2>
+
+<div class="box">
+
+<pre>
+canSubmit =
+
+selectedCardIdが存在
+
+AND
+
+Search Index利用可能
+
+AND
+
+ゲームが回答可能状態
+
+AND
+
+回答処理中ではない
+
+AND
+
+再同期中ではない
+
+AND
+
+Dailyなら停止されていない
+
+AND
+
+Battleなら自分の手番
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+この条件はBrowser表示用であり、
+正式な回答受付条件はServer側でも確認する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>26. 回答可否一覧</h2>
+
+<table>
+
+<tr>
+<th>状態</th>
+<th>回答</th>
+</tr>
+
+<tr>
+<td>Search Index未読込</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>入力なし</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>1文字入力</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>2文字以上入力しただけ</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>候補表示中・未選択</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>正式カード名を手入力しただけ</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>対象カードを候補から選択済み</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>選択後に文字編集</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>回答処理中</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>状態再同期中</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>Battleで相手の手番</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>Battleでdeadline到達</td>
+<td>Client側も操作停止。正式判定はServer</td>
+</tr>
+
+<tr>
+<td>Daily suspended</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>ゲーム終了</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>error状態</td>
+<td>不可</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>27. 正式な回答Request</h2>
+
+<div class="box">
+
+<p>
+回答時にはカード名文字列ではなく
+card_idを送信する。
+</p>
+
+</div>
+
+<pre>
+{
+    "requestId": "...",
+    "card_id": "10201110"
+}
+</pre>
+
+<div class="notice">
+
+<p>
+実際のEndpoint・Session識別情報等は
+06で定義する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>28. requestId</h2>
+
+<div class="box">
+
+<p>
+正式な回答Requestごとに
+一意の
+<code>requestId</code>
+を付与する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>新しい回答操作には新しいrequestId。</li>
+<li>同一回答の通信再試行では同じrequestIdを使用。</li>
+<li>Serverが同じrequestIdを再受信しても回答を二重処理しない。</li>
+</ul>
+
+</div>
+
+<pre>
+回答操作A
+
+requestId = A
+
+
+↓
+
+通信障害
+
+
+↓
+
+回答操作Aを再確認
+
+requestId = A
+
+
+↓
+
+二重Guessにしない
+</pre>
+
+<hr>
+
+<h2>29. 回答ボタン連打対策</h2>
+
+<div class="rule">
+
+<p>
+回答ボタン押下直後に
+<code>isSubmitting</code>
+状態へ移行する。
+</p>
+
+</div>
+
+<pre>
+[ 回答する ]
+
+↓
+
+Click
+
+↓
+
+[ 回答中... ]
+
+disabled
+
+↓
+
+Server結果受信
+</pre>
+
+<div class="warning">
+
+<p>
+Button disabledだけに依存せず、
+ServerのrequestId処理でも二重処理を防止する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>30. Server側の正式検証</h2>
+
+<div class="box">
+
+<p>
+ServerはClientから受信したcard_idを
+無条件で信用しない。
+</p>
+
+</div>
+
+<pre>
+Request
+
+↓
+
+requestId確認
+
+↓
+
+Game Session確認
+
+↓
+
+Game Status確認
+
+↓
+
+data_version_id確認
+
+↓
+
+card_id存在確認
+
+↓
+
+回答対象範囲確認
+
+↓
+
+モード固有条件確認
+
+↓
+
+正式Guess処理
+</pre>
+
+<hr>
+
+<h2>31. Battleの追加検証</h2>
+
+<div class="rule">
+
+<p>
+Battleではさらに以下を確認する。
+</p>
+
+<ul>
+<li>送信者が参加Playerである。</li>
+<li>現在そのPlayerの手番である。</li>
+<li>ゲームがplaying状態。</li>
+<li>Server時刻がdeadlineより前。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>32. Battle deadline</h2>
+
+<div class="warning">
+
+<p>
+Serverが回答Requestを処理する時点で
+</p>
+
+<pre>
+serverNow >= deadline
+</pre>
+
+<p>
+であれば、
+PlayerのGuessを先に成立させない。
+</p>
+
+</div>
+
+<pre>
+Playerが回答Button
+
+↓
+
+Request送信
+
+↓
+
+Server到着時
+
+serverNow >= deadline
+
+↓
+
+Timeout処理を優先
+
+↓
+
+Player Guessは不成立
+
+↓
+
+Serverの最新Battle状態を返す
+</pre>
+
+<div class="rule">
+
+<p>
+Browser上のCountdown表示が
+まだ0になっていなかった場合でも、
+正式なdeadline判定はServerを正とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>33. Timeout Random Guess</h2>
+
+<div class="box">
+
+<p>
+Battleの時間切れRandom Guessは
+入力UIから送信しない。
+</p>
+
+</div>
+
+<pre>
+deadline
+
+↓
+
+Server
+
+↓
+
+正解を除いた有効回答範囲から
+Random Card選択
+
+↓
+
+通常Guessとして処理
+
+↓
+
+Historyへ追加
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>過去回答済みカードも候補。</li>
+<li>重複可能。</li>
+<li>正解カードは除外。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>34. 回答成功後</h2>
+
+<div class="box">
+
+<p>
+GuessがServerで正式に成立し、
+ゲームが継続する場合は
+次の入力へ戻る。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>Serverの正式結果を反映。</li>
+<li>回答履歴更新。</li>
+<li>回答回数更新。</li>
+<li>入力文字列を空にする。</li>
+<li>selectedCardIdをnullにする。</li>
+<li>サジェストを閉じる。</li>
+<li>isSubmitting解除。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>35. 通常ゲーム終了</h2>
+
+<div class="box">
+
+<p>
+正解・回答上限・降参・Battle勝敗等により
+通常のゲーム終了が確定した場合は、
+次の入力状態へ戻さない。
+</p>
+
+</div>
+
+<pre>
+Server
+
+gameStatus = ended
+
+↓
+
+入力UI停止
+
+↓
+
+05-07 Result Screen
+</pre>
+
+<div class="rule">
+
+<p>
+通常終了時は05-07の結果画面へ移行する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>36. Daily停止は通常終了ではない</h2>
+
+<div class="warning">
+
+<p>
+Dailyが
+<code>DAILY_SUSPENDED</code>
+となった場合、
+通常のゲーム終了として結果画面へ送らない。
+</p>
+
+</div>
+
+<pre>
+Daily操作
+
+↓
+
+Server
+
+DAILY_SUSPENDED
+
+↓
+
+入力UIを完全停止
+
+↓
+
+Daily停止専用画面
+
+↓
+
+正解カード非公開
+</pre>
+
+<div class="rule">
+
+<ul>
+<li>回答不可。</li>
+<li>ヒント不可。</li>
+<li>降参不可。</li>
+<li>通常結果画面へ行かない。</li>
+<li>正解カードを表示しない。</li>
+<li>失敗扱いにしない。</li>
+<li>降参扱いにしない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>37. Daily停止の検出タイミング</h2>
+
+<div class="box">
+
+<p>
+Daily停止は
+ページ表示時だけでなく、
+Serverへ状態変更操作を送った際にも検出される可能性がある。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+少なくとも以下のServer操作で
+Daily停止状態を正式に確認する。
+</p>
+
+<ul>
+<li>Start。</li>
+<li>Resume。</li>
+<li>Guess。</li>
+<li>Hint。</li>
+</ul>
+
+</div>
+
+<pre>
+ゲーム画面を開いた時点ではactive
+
+↓
+
+管理者がDaily停止
+
+↓
+
+PlayerがGuess
+
+↓
+
+Server
+
+DAILY_SUSPENDED
+
+↓
+
+そのGuessを通常回答として成立させない
+
+↓
+
+停止画面
+</pre>
+
+<hr>
+
+<h2>38. Daily停止時の入力内容</h2>
+
+<div class="rule">
+
+<p>
+Daily停止が確定した場合、
+その時点で入力していたカードを
+回答として扱わない。
+</p>
+
+</div>
+
+<p>
+停止後にその入力を再送できるUIも表示しない。
+</p>
+
+<hr>
+
+<h2>39. 通信失敗</h2>
+
+<div class="box">
+
+<p>
+回答Requestを送った後に通信が切れ、
+結果を受信できなかった場合、
+Clientだけで成功・失敗を判断しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>回答回数をClientだけで減らさない。</li>
+<li>回答履歴をClientだけで追加しない。</li>
+<li>同じrequestIdで処理結果を確認可能にする。</li>
+<li>Server状態確定まで別Guessを送信しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>40. Server Stateとの再同期</h2>
+
+<div class="box">
+
+<p>
+通信エラー・Reload・Reconnect等の後は、
+Serverから現在の完全なゲーム状態を取得して
+UIを復元する。
+</p>
+
+</div>
+
+<pre>
+Client状態不明
+
+↓
+
+回答UI停止
+
+↓
+
+Server Snapshot取得
+
+↓
+
+正式State反映
+
+↓
+
+回答可能なら入力UI再開
+</pre>
+
+<hr>
+
+<h2>41. stateVersion</h2>
+
+<div class="box">
+
+<p>
+Serverから受け取るゲーム状態には
+単調増加する
+<code>stateVersion</code>
+を利用できる構造とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+現在表示している状態より古いstateVersionの更新が
+遅れて届いた場合は、
+古い状態でUIを巻き戻さない。
+</p>
+
+</div>
+
+<pre>
+Current UI
+
+stateVersion = 15
+
+
+遅延Response
+
+stateVersion = 14
+
+
+↓
+
+無視
+</pre>
+
+<hr>
+
+<h2>42. 同一カードの再回答</h2>
+
+<div class="rule">
+
+<ul>
+<li>同じカードを再び検索可能。</li>
+<li>サジェストから除外しない。</li>
+<li>「回答済み」警告を表示しない。</li>
+<li>正式に送信すれば通常の1Guess。</li>
+<li>回答回数も通常通り1回消費。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>43. Search Index読み込み</h2>
+
+<div class="box">
+
+<p>
+ゲームのVersionに対応するSearch Indexが
+利用可能になるまで
+回答入力を開始できないようにする。
+</p>
+
+</div>
+
+<pre>
+Game State取得
+
+↓
+
+data_version_id
+version_code取得
+
+↓
+
+対応Search Index取得
+
+↓
+
+Version確認
+
+↓
+
+対象範囲生成
+
+↓
+
+入力UI有効
+</pre>
+
+<hr>
+
+<h2>44. Search Index読み込み失敗</h2>
+
+<div class="warning">
+
+<ul>
+<li>回答Buttonを有効化しない。</li>
+<li>カード候補を不完全な状態で表示しない。</li>
+<li>別VersionのIndexで代用しない。</li>
+<li>再取得可能なUIを用意する。</li>
+</ul>
+
+</div>
+
+<pre>
+カード検索データを読み込めませんでした。
+
+[ 再試行 ]
+</pre>
+
+<hr>
+
+<h2>45. Search Index Version不一致</h2>
+
+<div class="warning">
+
+<pre>
+Game
+
+version_code = A
+
+
+Loaded Search Index
+
+version_code = B
+
+
+↓
+
+入力UIを有効化しない
+</pre>
+
+</div>
+
+<p>
+別Versionの候補から回答する状態を許可しない。
+</p>
+
+<hr>
+
+<h2>46. Solo</h2>
+
+<div class="box">
+
+<p>
+Soloではゲーム開始後から
+通常終了まで入力UIを利用できる。
+</p>
+
+</div>
+
+<pre>
+カード名入力
+
+↓
+
+Browser Search
+
+↓
+
+候補選択
+
+↓
+
+回答する
+
+↓
+
+Server Guess
+
+↓
+
+History更新
+
+↓
+
+次の回答
+</pre>
+
+<hr>
+
+<h2>47. Daily</h2>
+
+<div class="box">
+
+<p>
+Dailyの入力UIは
+基本的にSoloと共通とする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>Search方式共通。</li>
+<li>Suggestion共通。</li>
+<li>回答Button共通。</li>
+<li>最大10回答。</li>
+<li>回答範囲はdaily_configs側の設定を使用。</li>
+<li>Playerが回答範囲を変更できない。</li>
+<li>daily_controlsがsuspendedなら入力不可。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>48. 2人出題</h2>
+
+<div class="box">
+
+<p>
+正解カード設定後、
+回答者は共通入力UIを使用する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>カード検索UI共通。</li>
+<li>回答Button共通。</li>
+<li>回答上限10回。</li>
+<li>ヒントなし。</li>
+<li>回答者は別UIの降参操作を利用可能。</li>
+<li>出題者の切断後もServer Stateが継続可能なら入力を続行。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>49. 2人出題の出題者側カード選択</h2>
+
+<div class="box">
+
+<p>
+出題者が正解カードを選択する画面は、
+回答者のGuess入力とは目的が異なるため
+別状態として扱う。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+正解設定後のanswer_card_idを
+回答者Clientへ送信しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>50. Battle</h2>
+
+<div class="box">
+
+<p>
+Battleも共通入力UIを使用するが、
+自分の手番でのみ回答可能とする。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>状態</th>
+<th>入力</th>
+</tr>
+
+<tr>
+<td>自分の手番</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>相手の手番</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>回答処理中</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>再接続中</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>deadline到達</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>終了後</td>
+<td>不可</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>51. Battle手番切替</h2>
+
+<div class="rule">
+
+<p>
+Serverから受け取った正式Stateに基づいて
+入力UIを切り替える。
+</p>
+
+</div>
+
+<pre>
+相手のターン
+
+↓
+
+Input disabled
+
+
+Server State更新
+
+↓
+
+あなたのターン
+
+↓
+
+Input enabled
+</pre>
+
+<div class="warning">
+
+<p>
+Client側で勝手にturnを進めない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>52. Smartphone</h2>
+
+<div class="rule">
+
+<ul>
+<li>入力欄を親幅に合わせる。</li>
+<li>サジェスト項目はTapしやすい高さ。</li>
+<li>回答Buttonも十分なTap領域。</li>
+<li>横Scrollを前提にしない。</li>
+<li>PCと基本操作手順を変えない。</li>
+</ul>
+
+</div>
+
+<p class="small">
+詳細は05-06で定義する。
+</p>
+
+<hr>
+
+<h2>53. HTML基本例</h2>
+
+<div class="box">
+
+<pre>
+&lt;div id="sg-app"&gt;
+
+    &lt;div class="sg-input-area"&gt;
+
+        &lt;input
+            class="sg-card-input"
+            type="text"
+            autocomplete="off"
+            placeholder="カード名を入力"
+        &gt;
+
+        &lt;div class="sg-suggestions"&gt;
+        &lt;/div&gt;
+
+        &lt;button
+            class="sg-answer-button"
+            type="button"
+            disabled
+        &gt;
+            回答する
+        &lt;/button&gt;
+
+    &lt;/div&gt;
+
+&lt;/div&gt;
+</pre>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>回答Buttonは <code>type="button"</code> を基本。</li>
+<li>Classは <code>sg-</code> prefix。</li>
+<li>UIは <code>#sg-app</code> 内で完結。</li>
+<li>WordPress等の外側formへ巻き込まれない構造。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>54. Browser内部状態</h2>
+
+<div class="box">
+
+<p>
+入力UIでは概念的に以下の状態を持つ。
+</p>
+
+</div>
+
+<pre>
+inputValue
+
+selectedCardId
+
+suggestions
+
+searchIndex
+
+versionCode
+
+eligibleCardIds
+
+isComposing
+
+isSubmitting
+
+gameStatus
+
+isResyncing
+
+isMyTurn
+
+deadline
+
+stateVersion
+</pre>
+
+<div class="notice">
+
+<p>
+上記は概念名であり、
+JavaScript変数名そのものを強制するものではない。
+</p>
+
+<p>
+内部DB識別子
+<code>data_version_id</code>
+をClientへ不要に公開する必要はない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>55. 入力状態遷移</h2>
+
+<div class="box">
+
+<pre>
+【ゲーム状態取得】
+
+version_code取得
+
+↓
+
+Search Index取得
+
+↓
+
+回答対象範囲確定
+
+↓
+
+【未入力】
+
+selectedCardId = null
+回答不可
+
+↓
+
+2文字以上入力
+
+↓
+
+【候補表示】
+
+Browser内Search
+回答不可
+
+↓
+
+候補選択
+
+↓
+
+【選択済み】
+
+selectedCardIdあり
+回答可能
+
+↓
+
+回答Button
+
+↓
+
+【Submitting】
+
+requestId生成
+Input disabled
+
+↓
+
+Server Response
+</pre>
+
+</div>
+
+<hr>
+
+<h2>56. Server Response後の分岐</h2>
+
+<pre>
+Server Response
+
+        │
+        ├──────── Game Continue
+        │
+        │
+        ▼
+        │
+    入力Reset
+    次の回答へ
+        │
+        │
+        ├──────── Normal Game End
+        │
+        │
+        ▼
+        │
+    05-07 Result Screen
+        │
+        │
+        ├──────── DAILY_SUSPENDED
+        │
+        │
+        ▼
+        │
+    Daily停止専用画面
+    正解非公開
+        │
+        │
+        └──────── Error
+                 │
+                 ▼
+             Error画面
+</pre>
+
+<div class="rule">
+
+<p>
+Daily停止と通常ゲーム終了を
+同一分岐にしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>57. 入力UIで設置しない機能</h2>
+
+<div class="box">
+
+<ul>
+<li>読み仮名専用検索。</li>
+<li>音声回答専用機能。</li>
+<li>履歴からの自動重複排除。</li>
+<li>同一カード回答警告。</li>
+<li>Enterキー回答。</li>
+<li>文字列のみを正式回答として送信する機能。</li>
+<li>カード名以外の項目検索。</li>
+<li>文字入力ごとのWorker検索。</li>
+<li>文字入力ごとのD1検索。</li>
+<li>ゲーム対象外カードの回答。</li>
+<li>ゲーム途中のSearch Index Version切替。</li>
+<li>Clientだけでの正式回答判定。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>58. Cloudflare側との役割分担</h2>
+
+<table>
+
+<tr>
+<th>処理</th>
+<th>担当</th>
+</tr>
+
+<tr>
+<td>HTML / CSS / JS配信</td>
+<td>Cloudflare Pages</td>
+</tr>
+
+<tr>
+<td>Version別Search Index配信</td>
+<td>静的配信</td>
+</tr>
+
+<tr>
+<td>文字入力検索</td>
+<td>Browser</td>
+</tr>
+
+<tr>
+<td>Suggestion表示</td>
+<td>Browser</td>
+</tr>
+
+<tr>
+<td>回答Request</td>
+<td>Browser → Server</td>
+</tr>
+
+<tr>
+<td>requestId処理</td>
+<td>Server / Durable Object</td>
+</tr>
+
+<tr>
+<td>card_id検証</td>
+<td>Server</td>
+</tr>
+
+<tr>
+<td>対象範囲検証</td>
+<td>Server</td>
+</tr>
+
+<tr>
+<td>手番検証</td>
+<td>Battle Server</td>
+</tr>
+
+<tr>
+<td>deadline検証</td>
+<td>Battle Server</td>
+</tr>
+
+<tr>
+<td>正式判定</td>
+<td>Server</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>59. 検索・回答フロー</h2>
+
+<div class="box">
+
+<pre>
+Player
+
+↓
+
+カード名入力
+
+↓
+
+Browser
+
+Version別Search Index
++
+回答可能集合
+
+↓
+
+部分一致検索
+
+↓
+
+Suggestion
+
+↓
+
+Card選択
+
+↓
+
+selectedCardId
+
+↓
+
+回答する
+
+↓
+
+requestId生成
+
+↓
+
+Server
+
+requestId確認
+Game State確認
+Version確認
+card_id確認
+対象範囲確認
+手番確認
+deadline確認
+Daily状態確認
+
+↓
+
+正式Guess
+
+↓
+
+正式State Response
+
+↓
+
+Browser UI更新
+</pre>
+
+</div>
+
+<hr>
+
+<h2>60. Clientの範囲判定はSecurity境界ではない</h2>
+
+<div class="warning">
+
+<p>
+Search IndexやJavaScriptが
+対象外カードを隠していても、
+それをSecurity対策として扱わない。
+</p>
+
+</div>
+
+<p>
+DevTools等でClientを改変される前提で、
+Serverが正式に検証する。
+</p>
+
+<hr>
+
+<h2>61. UI上のエラー</h2>
+
+<div class="box">
+
+<p>
+入力方法に起因する軽微な状態は
+画面内で処理する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>状態</th>
+<th>処理</th>
+</tr>
+
+<tr>
+<td>候補未選択</td>
+<td>回答Button disabled</td>
+</tr>
+
+<tr>
+<td>文字編集で選択解除</td>
+<td>再選択を要求</td>
+</tr>
+
+<tr>
+<td>Search Index未読込</td>
+<td>回答不可</td>
+</tr>
+
+<tr>
+<td>Search Index取得失敗</td>
+<td>再試行導線</td>
+</tr>
+
+<tr>
+<td>通信中</td>
+<td>回答Button disabled</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>62. Server Error</h2>
+
+<div class="box">
+
+<p>
+Serverがデータ異常等を返した場合は、
+入力欄へ適当な値を補完して続行せず、
+03・06で定義するerror状態へ移行する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>63. 確定事項</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>確定仕様</th>
+</tr>
+
+<tr>
+<td>入力対象</td>
+<td>カード名</td>
+</tr>
+
+<tr>
+<td>検索方式</td>
+<td>部分一致</td>
+</tr>
+
+<tr>
+<td>検索場所</td>
+<td>Browser</td>
+</tr>
+
+<tr>
+<td>入力ごとのWorker検索</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>入力ごとのD1検索</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>Search Index</td>
+<td>Version別静的JSON</td>
+</tr>
+
+<tr>
+<td>内部Version</td>
+<td>data_version_id</td>
+</tr>
+
+<tr>
+<td>公開Version表記</td>
+<td>version_code</td>
+</tr>
+
+<tr>
+<td>Index filename</td>
+<td>card-search-index-[version_code].json</td>
+</tr>
+
+<tr>
+<td>途中Version変更</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>Search対象</td>
+<td>現在の回答可能カードのみ</td>
+</tr>
+
+<tr>
+<td>Custom Token</td>
+<td>Pack Filterのみ除外</td>
+</tr>
+
+<tr>
+<td>検索開始</td>
+<td>2文字以上</td>
+</tr>
+
+<tr>
+<td>最大候補</td>
+<td>10件</td>
+</tr>
+
+<tr>
+<td>かな変換</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>候補選択</td>
+<td>Click / Tap</td>
+</tr>
+
+<tr>
+<td>選択時</td>
+<td>正式name + card_id保持</td>
+</tr>
+
+<tr>
+<td>card_id</td>
+<td>文字列</td>
+</tr>
+
+<tr>
+<td>完全名手入力</td>
+<td>候補未選択なら回答不可</td>
+</tr>
+
+<tr>
+<td>文字編集</td>
+<td>selectedCardId解除</td>
+</tr>
+
+<tr>
+<td>回答確定</td>
+<td>回答するButtonのみ</td>
+</tr>
+
+<tr>
+<td>候補選択だけで回答</td>
+<td>しない</td>
+</tr>
+
+<tr>
+<td>Enter回答</td>
+<td>禁止</td>
+</tr>
+
+<tr>
+<td>IME</td>
+<td>composition考慮</td>
+</tr>
+
+<tr>
+<td>正式回答値</td>
+<td>card_id</td>
+</tr>
+
+<tr>
+<td>正式対象範囲検証</td>
+<td>Server</td>
+</tr>
+
+<tr>
+<td>正式Game State</td>
+<td>Server</td>
+</tr>
+
+<tr>
+<td>二重送信UI対策</td>
+<td>Submitting中disabled</td>
+</tr>
+
+<tr>
+<td>二重処理Server対策</td>
+<td>requestId</td>
+</tr>
+
+<tr>
+<td>Retry</td>
+<td>同一回答なら同一requestId</td>
+</tr>
+
+<tr>
+<td>同一カード再回答</td>
+<td>許可</td>
+</tr>
+
+<tr>
+<td>Guess成功後</td>
+<td>入力・選択状態Reset</td>
+</tr>
+
+<tr>
+<td>Reload / Reconnect</td>
+<td>Server State再同期後に入力復元</td>
+</tr>
+
+<tr>
+<td>stateVersion</td>
+<td>古いStateを反映しない</td>
+</tr>
+
+<tr>
+<td>Battle回答</td>
+<td>自分の手番のみ</td>
+</tr>
+
+<tr>
+<td>Battle deadline</td>
+<td>ServerNow &gt;= deadlineならTimeout優先</td>
+</tr>
+
+<tr>
+<td>Timeout Random Guess</td>
+<td>Server処理</td>
+</tr>
+
+<tr>
+<td>Daily停止</td>
+<td>入力不可</td>
+</tr>
+
+<tr>
+<td>DAILY_SUSPENDED</td>
+<td>専用停止画面</td>
+</tr>
+
+<tr>
+<td>Daily停止時正解</td>
+<td>非公開</td>
+</tr>
+
+<tr>
+<td>Daily停止時Result</td>
+<td>通常Resultへ移行しない</td>
+</tr>
+
+<tr>
+<td>Search Index不一致</td>
+<td>入力UI有効化禁止</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>64. 05-02で詳細定義しない内容</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>設計書</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td>02</td>
+<td>回答範囲・回答回数・Customルール</td>
+</tr>
+
+<tr>
+<td>03</td>
+<td>正式なカード判定</td>
+</tr>
+
+<tr>
+<td>04</td>
+<td>Data Version・D1・Search Index構造</td>
+</tr>
+
+<tr>
+<td>05-03</td>
+<td>回答履歴</td>
+</tr>
+
+<tr>
+<td>05-04</td>
+<td>カード詳細表示</td>
+</tr>
+
+<tr>
+<td>05-05</td>
+<td>判定色・記号</td>
+</tr>
+
+<tr>
+<td>05-06</td>
+<td>Responsive</td>
+</tr>
+
+<tr>
+<td>05-07</td>
+<td>通常Result Screen</td>
+</tr>
+
+<tr>
+<td>05-08</td>
+<td>Modal</td>
+</tr>
+
+<tr>
+<td>05-09</td>
+<td>Suggestion・IME・Timer等の細部</td>
+</tr>
+
+<tr>
+<td>06</td>
+<td>API・DO・requestId・stateVersion・Reconnect・deadline</td>
+</tr>
+
+<tr>
+<td>07</td>
+<td>Daily停止・Maintenance</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>65. 実装時調整事項</h2>
+
+<div class="notice">
+
+<ul>
+<li>入力欄の具体的な高さ。</li>
+<li>回答Buttonの具体的な横幅。</li>
+<li>Suggestion 1件の高さ。</li>
+<li>Software Keyboard表示時の位置。</li>
+<li>10件表示時の最大高さ。</li>
+<li>Browser内検索にDebounceが必要か。</li>
+<li>Search Index初回Loading表示。</li>
+<li>Search Index Retry UI。</li>
+<li>Submitting時のButton Animation。</li>
+</ul>
+
+<p>
+これらは基本的な回答フローを変更せず
+実装・実機確認時に調整する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>66. 本設計書の位置付け</h2>
+
+<div class="box">
+
+<p>
+本書「05-02 入力UI」は、
+Playerがカードを検索・選択し、
+Serverへ正式Guessを送信するまでの
+UI上の基本動作を定義する。
+</p>
+
+<p>
+正式判定は03、
+Data構造は04、
+詳細Suggestion操作は05-09、
+Server側の回答処理は06を正とする。
+</p>
+
+</div>
+
+<hr>
+
+<p class="small">
+Shado Guesser 基本設計書<br>
+05-02 入力UI<br><br>
+©Shado Guesser
+</p>
+
+</body>
+</html>

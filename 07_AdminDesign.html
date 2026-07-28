@@ -1,0 +1,4024 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Shado Guesser 基本設計書 - 07 管理画面・運営操作</title>
+
+<style>
+
+body{
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    color:#222;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+}
+
+h1{
+    border-bottom:4px solid #3f51b5;
+    padding-bottom:10px;
+}
+
+h2{
+    margin-top:45px;
+    border-left:8px solid #3f51b5;
+    padding-left:12px;
+}
+
+h3{
+    margin-top:30px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th,
+td{
+    border:1px solid #cccccc;
+    padding:10px;
+    vertical-align:top;
+}
+
+th{
+    background:#3f51b5;
+    color:white;
+}
+
+.box{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+}
+
+.notice{
+    background:#fff8e1;
+    border-left:6px solid #ffc107;
+    padding:15px;
+    margin-top:20px;
+}
+
+.rule{
+    background:#e8eaf6;
+    border-left:6px solid #3f51b5;
+    padding:15px;
+    margin-top:20px;
+}
+
+.warning{
+    background:#ffebee;
+    border-left:6px solid #d32f2f;
+    padding:15px;
+    margin-top:20px;
+}
+
+.example{
+    background:#e8f5e9;
+    border-left:6px solid #4caf50;
+    padding:15px;
+    margin-top:20px;
+}
+
+pre{
+    background:#222;
+    color:#f5f5f5;
+    padding:20px;
+    border-radius:8px;
+    overflow:auto;
+    line-height:1.6;
+}
+
+code{
+    background:#eeeeee;
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.small{
+    color:#777;
+    font-size:0.9em;
+}
+
+@media(max-width:700px){
+
+    body{
+        padding:18px;
+    }
+
+    table{
+        font-size:0.9em;
+    }
+
+    th,
+    td{
+        padding:7px;
+    }
+
+    pre{
+        padding:12px;
+        font-size:0.85em;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Shado Guesser 基本設計書</h1>
+
+<p>
+<strong>07：管理画面・運営操作</strong>
+</p>
+
+<p>
+本設計書では、Shado Guesserの運営者が使用する管理画面について、
+認証、Dashboard、カードデータ閲覧、Data Version管理、
+Daily管理、エラーログ、メンテナンス、
+運営設定、監査ログ、および管理APIの安全性を定義する。
+</p>
+
+<p>
+管理画面は一般プレイヤー向けゲーム画面とは完全に分離し、
+管理者のみがアクセス可能な非公開領域として運用する。
+</p>
+
+<hr>
+
+<h2>1. 目的</h2>
+
+<div class="box">
+
+<p>
+管理画面の目的は、
+カードデータやゲームロジックそのものを自由に編集することではなく、
+Shado Guesserを安全に運営するために必要な
+状態確認・Version公開・Daily停止・障害確認等を行うことである。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>基本方針</strong>
+
+<ul>
+<li>一般ユーザーから管理画面へアクセスできないようにする。</li>
+<li>初期版では管理者権限を1種類のみとする。</li>
+<li>カードデータを管理画面から直接編集しない。</li>
+<li>Published Versionは書き換えない。</li>
+<li>Data Versionの公開・Current変更は管理画面から可能。</li>
+<li>Daily正解を途中変更しない。</li>
+<li>問題があるDailyはその日自体を停止する。</li>
+<li>ゲームルールの基本数値を管理画面から変更しない。</li>
+<li>重要な管理操作は監査ログへ残す。</li>
+<li>メンテナンスモードを用意する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>2. 管理画面の構成</h2>
+
+<div class="box">
+
+<p>
+初期版では以下の管理機能を用意する。
+</p>
+
+<pre>
+管理画面
+
+├─ Dashboard
+│
+├─ Data Version
+│
+├─ カードデータ確認
+│
+├─ Daily
+│
+├─ Error Logs
+│
+├─ Settings
+│
+└─ Audit Logs
+</pre>
+
+</div>
+
+<hr>
+
+<h2>3. 一般ゲーム画面との分離</h2>
+
+<div class="box">
+
+<p>
+管理画面は一般プレイヤー向けの
+Shado Guesserゲーム画面とは分離する。
+</p>
+
+</div>
+
+<pre>
+一般ユーザー
+
+https://game.example.com/
+
+
+管理者
+
+https://admin.example.com/
+</pre>
+
+<div class="notice">
+
+<p>
+実際の本番ドメイン名は実装時に決定する。
+</p>
+
+<p>
+専用サブドメインではなく
+<code>/admin/</code>
+配下で構成することも可能だが、
+一般公開画面と管理画面を明確に分離できる構成を優先する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>4. 管理画面認証</h2>
+
+<div class="box">
+
+<p>
+初期版ではShado Guesser独自の
+管理者ID・パスワード機能を作成しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>
+Cloudflare Access等を利用し、
+管理画面自体を認証済み管理者のみアクセス可能にする。
+</strong>
+
+</div>
+
+<hr>
+
+<h2>5. 管理者アカウントテーブル</h2>
+
+<div class="box">
+
+<p>
+初期版ではShado Guesser内に
+以下のような独自アカウントテーブルを作成しない。
+</p>
+
+</div>
+
+<pre>
+admins
+
+admin_passwords
+
+admin_sessions
+</pre>
+
+<div class="rule">
+
+<p>
+管理者認証は外部の認証保護を利用し、
+ゲームDBへ独自パスワードを保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>6. 管理者権限</h2>
+
+<div class="box">
+
+<p>
+初期版では管理権限を細かく分けない。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>権限</th>
+<th>初期版</th>
+</tr>
+
+<tr>
+<td>閲覧専用管理者</td>
+<td>作らない</td>
+</tr>
+
+<tr>
+<td>データ管理者</td>
+<td>分離しない</td>
+</tr>
+
+<tr>
+<td>Daily管理者</td>
+<td>分離しない</td>
+</tr>
+
+<tr>
+<td>システム管理者</td>
+<td>分離しない</td>
+</tr>
+
+<tr>
+<td>管理者</td>
+<td>1種類</td>
+</tr>
+
+</table>
+
+<div class="notice">
+
+<p>
+将来複数人運営となり、
+権限分離が必要になった場合は拡張可能とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>7. 管理画面APIの保護</h2>
+
+<div class="warning">
+
+<p>
+画面HTMLだけをCloudflare Accessで保護して、
+管理APIを一般公開してはならない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+管理画面と管理APIの両方を
+認証済み管理者のみ利用可能とする。
+</p>
+
+</div>
+
+<pre>
+Admin Browser
+
+↓
+
+Cloudflare Access
+
+↓
+
+Admin UI
+
+↓
+
+Admin API
+
+↓
+
+Access認証確認
+
+↓
+
+Worker
+
+↓
+
+D1
+</pre>
+
+<hr>
+
+<h2>8. 管理APIでの認証再確認</h2>
+
+<div class="box">
+
+<p>
+管理画面へ入れたことだけを理由に、
+管理APIで無条件に操作を許可しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+Worker側でも管理者の認証情報を確認する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>9. Dashboard</h2>
+
+<div class="box">
+
+<p>
+管理画面トップでは、
+現在のShado Guesser運営状態を
+短時間で確認できる情報を表示する。
+</p>
+
+</div>
+
+<pre>
+Shado Guesser Admin
+
+────────────────────────
+
+サービス状態
+● 通常運転
+
+Current Data Version
+2026-07-28-01
+
+本日のDaily
+● 利用可能
+2026-07-29
+
+直近24時間のエラー
+3件
+
+Data Validation
+● 正常
+</pre>
+
+<hr>
+
+<h2>10. Dashboard表示項目</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td>サービス状態</td>
+<td>通常 / メンテナンス</td>
+</tr>
+
+<tr>
+<td>Current Version</td>
+<td>現在新規ゲームに使用されるData Version</td>
+</tr>
+
+<tr>
+<td>本日のDaily</td>
+<td>未生成 / 利用可能 / 停止</td>
+</tr>
+
+<tr>
+<td>Daily Version</td>
+<td>生成済みの場合のみ表示</td>
+</tr>
+
+<tr>
+<td>Daily正解</td>
+<td>生成済みの場合、管理者のみ確認可能</td>
+</tr>
+
+<tr>
+<td>エラー件数</td>
+<td>直近のerror_logs件数</td>
+</tr>
+
+<tr>
+<td>データ状態</td>
+<td>Current Versionの検証状態</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>11. Dashboardに表示しないもの</h2>
+
+<div class="box">
+
+<ul>
+<li>ユーザーランキング。</li>
+<li>ユーザー戦績。</li>
+<li>ユーザー一覧。</li>
+<li>Dailyストリーク。</li>
+<li>プレイヤーアカウント。</li>
+<li>個人別ゲーム履歴。</li>
+</ul>
+
+</div>
+
+<div class="rule">
+
+<p>
+初期版Shado Guesserには
+ユーザーアカウント機能が存在しないため、
+管理画面にもユーザー管理機能を設けない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>12. Data Version一覧</h2>
+
+<div class="box">
+
+<pre>
+Data Version
+
+┌──────────────────┬───────────┬─────────┐
+│ Version          │ Status    │ Current │
+├──────────────────┼───────────┼─────────┤
+│ 2026-07-29-01    │ Draft     │         │
+│ 2026-07-28-02    │ Published │         │
+│ 2026-07-28-01    │ Published │ ●       │
+└──────────────────┴───────────┴─────────┘
+</pre>
+
+</div>
+
+<hr>
+
+<h2>13. Version状態</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>状態</th>
+<th>意味</th>
+</tr>
+
+<tr>
+<td>Draft</td>
+<td>まだ一般ゲームへ使用しない編集中・検証中Version</td>
+</tr>
+
+<tr>
+<td>Published</td>
+<td>公開可能状態として確定済みVersion</td>
+</tr>
+
+<tr>
+<td>Current</td>
+<td>新規ゲームで現在使用するPublished Version</td>
+</tr>
+
+</table>
+
+</div>
+
+<div class="rule">
+
+<p>
+CurrentはPublished Versionの中から1つだけ存在する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>14. カードデータの直接編集</h2>
+
+<div class="warning">
+
+<strong>
+管理画面からカードマスターを直接編集しない。
+</strong>
+
+</div>
+
+<div class="box">
+
+<p>
+以下のような編集フォームは初期版では作成しない。
+</p>
+
+</div>
+
+<pre>
+カード名
+二刀のゴブリン
+
+コスト
+[ 1 ]
+
+攻撃力
+[ 1 ]
+
+体力
+[ 1 ]
+
+[ 保存 ]
+</pre>
+
+<div class="rule">
+
+<p>
+カードデータ変更は
+08 データ更新手順で定義する
+Import・正規化・Validation・Version生成を経由する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>15. カードデータ確認</h2>
+
+<div class="box">
+
+<p>
+カードデータは編集できないが、
+管理画面から内容を確認できるようにする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>Version指定。</li>
+<li>カード名検索。</li>
+<li>card_id検索。</li>
+<li>カード詳細確認。</li>
+<li>画像参照確認。</li>
+<li>タイプ確認。</li>
+<li>キーワード確認。</li>
+<li>enabled状態確認。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>16. カードデータ確認はRead Only</h2>
+
+<div class="box">
+
+<pre>
+カード詳細
+
+card_id
+10201110
+
+name
+二刀のゴブリン
+
+cost
+1
+
+...
+
+[編集]
+↑
+設置しない
+</pre>
+
+</div>
+
+<hr>
+
+<h2>17. Draft Versionの検証</h2>
+
+<div class="box">
+
+<p>
+Draft Versionに対し、
+公開前Validationを実行できる管理操作を用意する。
+</p>
+
+</div>
+
+<pre>
+2026-07-29-01
+Draft
+
+[ 検証する ]
+</pre>
+
+<hr>
+
+<h2>18. Validation確認項目</h2>
+
+<div class="box">
+
+<p>
+04および08で定義されるValidation結果を管理画面へ表示する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>例</th>
+</tr>
+
+<tr>
+<td>card_id重複</td>
+<td>正常 / エラー</td>
+</tr>
+
+<tr>
+<td>class</td>
+<td>正常 / 未定義値あり</td>
+</tr>
+
+<tr>
+<td>type</td>
+<td>正常 / 未定義値あり</td>
+</tr>
+
+<tr>
+<td>rarity</td>
+<td>正常 / 未定義値あり</td>
+</tr>
+
+<tr>
+<td>Follower atk / life</td>
+<td>正常 / 欠損あり</td>
+</tr>
+
+<tr>
+<td>card_set</td>
+<td>正常 / 不明IDあり</td>
+</tr>
+
+<tr>
+<td>画像参照</td>
+<td>正常 / 欠損あり</td>
+</tr>
+
+<tr>
+<td>検索Index</td>
+<td>生成済み / 未生成</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>19. Validation失敗Version</h2>
+
+<div class="warning">
+
+<p>
+Validationに失敗しているDraft Versionは
+Publishedへ変更できない。
+</p>
+
+</div>
+
+<pre>
+Validation
+
+ERROR
+
+↓
+
+[ 公開する ]
+disabled
+</pre>
+
+<hr>
+
+<h2>20. Version公開条件</h2>
+
+<div class="box">
+
+<p>
+VersionをPublishedへ変更する前に、
+少なくとも以下を確認する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>カードValidation成功。</li>
+<li>マスターデータValidation成功。</li>
+<li>関連テーブルValidation成功。</li>
+<li>検索Index生成済み。</li>
+<li>検索IndexのVersion一致。</li>
+<li>必要な画像参照が存在。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>21. Version公開</h2>
+
+<div class="box">
+
+<pre>
+2026-07-29-01
+
+Validation
+● PASS
+
+Search Index
+● READY
+
+↓
+
+[ 公開する ]
+
+↓
+
+確認モーダル
+
+↓
+
+Published
+</pre>
+
+</div>
+
+<hr>
+
+<h2>22. Published Versionの不変性</h2>
+
+<div class="rule">
+
+<strong>
+一度PublishedとなったVersionのデータは書き換えない。
+</strong>
+
+</div>
+
+<p>
+問題がある場合は、
+別の新しいVersionを作成する。
+</p>
+
+<div class="example">
+
+<pre>
+2026-07-29-01
+Published
+
+↓
+
+間違い発見
+
+↓
+
+2026-07-29-01を編集
+しない
+
+↓
+
+2026-07-29-02
+を新規作成
+</pre>
+
+</div>
+
+<hr>
+
+<h2>23. Current Version</h2>
+
+<div class="box">
+
+<p>
+Published Versionの中から、
+新規ゲームに使用するVersionを
+Currentとして1つ指定する。
+</p>
+
+</div>
+
+<pre>
+2026-07-27-01  Published
+2026-07-28-01  Published  ← Current
+2026-07-29-01  Published
+</pre>
+
+<hr>
+
+<h2>24. Current変更</h2>
+
+<div class="box">
+
+<p>
+Published Versionには
+「このVersionをCurrentにする」
+操作を用意する。
+</p>
+
+</div>
+
+<pre>
+2026-07-29-01
+
+[ Currentにする ]
+</pre>
+
+<div class="warning">
+
+<p>
+Current変更は新規ゲームに使用するカードデータを変更する
+重要な管理操作である。
+</p>
+
+<p>
+必ず確認モーダルを表示する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>25. Current変更確認</h2>
+
+<div class="box">
+
+<pre>
+Current Versionを変更しますか？
+
+2026-07-28-01
+        ↓
+2026-07-29-01
+
+Current Versionを変更すると、
+本日のデイリーは停止します。
+
+[ Currentを変更する ]
+</pre>
+
+</div>
+
+<hr>
+
+<h2>26. Current変更と進行中ゲーム</h2>
+
+<div class="rule">
+
+<p>
+Currentを変更しても、
+既に開始済みのゲームには影響させない。
+</p>
+
+</div>
+
+<pre>
+Game A
+
+dataVersion
+2026-07-28-01
+
+↓
+
+管理者がCurrent変更
+
+2026-07-29-01
+
+↓
+
+Game A
+2026-07-28-01のまま
+
+↓
+
+新規Game B
+2026-07-29-01
+</pre>
+
+<hr>
+
+<h2>27. Versionロールバック</h2>
+
+<div class="box">
+
+<p>
+問題が発生した場合、
+過去のPublished Versionを
+再びCurrentへ設定可能とする。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+Current
+
+2026-07-29-01
+
+↓
+
+問題発生
+
+↓
+
+2026-07-28-02
+
+[ Currentにする ]
+
+↓
+
+Current
+
+2026-07-28-02
+</pre>
+
+</div>
+
+<hr>
+
+<h2>28. ロールバックでもPublishedを変更しない</h2>
+
+<div class="rule">
+
+<p>
+ロールバックは
+Versionデータを書き換える処理ではない。
+</p>
+
+<p>
+<strong>Currentが指すVersionだけを変更する。</strong>
+</p>
+
+</div>
+
+<hr>
+
+<h2>29. Current変更とDaily</h2>
+
+<div class="warning">
+
+<strong>
+Current Versionが変更された場合、
+その時点のDailyを自動停止する。
+</strong>
+
+</div>
+
+<p>
+新Versionへの変更でも、
+過去Versionへのロールバックでも同様とする。
+</p>
+
+<pre>
+Current変更
+
+↓
+
+現在のdaily_keyを取得
+
+↓
+
+本日のDailyをsuspendedへ
+
+↓
+
+以後そのdaily_keyではDaily開始不可
+</pre>
+
+<hr>
+
+<h2>30. Published化だけではDailyを停止しない</h2>
+
+<div class="box">
+
+<p>
+Draft VersionをPublishedへ変更しただけでは、
+Current Versionは変わっていないため
+Dailyを停止しない。
+</p>
+
+</div>
+
+<pre>
+Version A
+Current
+
+Version B
+Draft
+
+↓
+
+Version BをPublished
+
+↓
+
+CurrentはVersion Aのまま
+
+↓
+
+Daily継続
+</pre>
+
+<div class="rule">
+
+<p>
+Daily自動停止のトリガーは
+<strong>Current Versionの変更</strong>
+とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>31. Daily管理</h2>
+
+<div class="box">
+
+<p>
+Daily管理画面では、
+現在のdaily_keyの状態を確認する。
+</p>
+
+</div>
+
+<pre>
+本日のDaily
+
+Daily Key
+2026-07-29
+
+状態
+● 利用可能
+
+Data Version
+2026-07-28-01
+
+正解
+○○○○
+
+作成日時
+2026/07/29 05:12
+</pre>
+
+<hr>
+
+<h2>32. Daily状態</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>状態</th>
+<th>意味</th>
+</tr>
+
+<tr>
+<td>未生成</td>
+<td>当日まだ誰もDailyを開始していない</td>
+</tr>
+
+<tr>
+<td>active</td>
+<td>利用可能</td>
+</tr>
+
+<tr>
+<td>suspended</td>
+<td>その日のDailyを停止済み</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>33. Daily未生成</h2>
+
+<div class="box">
+
+<p>
+その日の最初のアクセス前で
+Dailyがまだ生成されていない場合は、
+以下のように表示する。
+</p>
+
+</div>
+
+<pre>
+本日のDaily
+
+状態
+未生成
+
+Dailyは最初のアクセス時に
+自動生成されます。
+</pre>
+
+<hr>
+
+<h2>34. Daily事前生成</h2>
+
+<div class="rule">
+
+<strong>
+初期版では管理画面からDailyを事前生成しない。
+</strong>
+
+</div>
+
+<p>
+06で定義した
+「その日の最初のアクセス時に自動生成」
+を維持する。
+</p>
+
+<div class="notice">
+
+<p>
+Daily運用を単純化し、
+事前生成後のカード更新・Version変更等による
+管理の複雑化を避ける。
+</p>
+
+</div>
+
+<hr>
+
+<h2>35. Daily正解の確認</h2>
+
+<div class="box">
+
+<p>
+Dailyが生成済みの場合、
+管理者は正解カードを確認可能とする。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+一般ユーザー向けAPI・HTMLには
+正解情報を公開しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>36. Daily正解の変更</h2>
+
+<div class="rule">
+
+<strong>
+生成済みDailyの正解は変更しない。
+</strong>
+
+</div>
+
+<p>
+以下の機能は作成しない。
+</p>
+
+<ul>
+<li>正解変更。</li>
+<li>正解再抽選。</li>
+<li>Daily Revision。</li>
+<li>代替問題への切替。</li>
+<li>緊急正解変更。</li>
+</ul>
+
+<hr>
+
+<h2>37. Dailyに問題が発生した場合</h2>
+
+<div class="box">
+
+<p>
+カード更新または不具合によって
+その日のDailyを正常に提供できない場合は、
+問題を差し替えるのではなく
+<strong>当日のDaily自体を停止する。</strong>
+</p>
+
+</div>
+
+<pre>
+Daily
+
+↓
+
+問題発生
+
+↓
+
+正解変更
+しない
+
+↓
+
+Daily停止
+</pre>
+
+<hr>
+
+<h2>38. Daily停止理由</h2>
+
+<div class="box">
+
+<p>
+内部的には停止理由を識別できるようにする。
+</p>
+
+</div>
+
+<pre>
+card_update
+
+bug
+</pre>
+
+<table>
+
+<tr>
+<th>reason</th>
+<th>意味</th>
+</tr>
+
+<tr>
+<td><code>card_update</code></td>
+<td>Current Version変更による停止</td>
+</tr>
+
+<tr>
+<td><code>bug</code></td>
+<td>管理者が不具合を理由に停止</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>39. カード更新による自動停止</h2>
+
+<div class="box">
+
+<pre>
+Current Version変更
+
+↓
+
+現在のdaily_key確認
+
+↓
+
+daily_status = suspended
+
+reason = card_update
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+Dailyがまだ未生成の場合でも、
+現在のdaily_key自体を停止状態として記録する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>40. 未生成Dailyも停止できる</h2>
+
+<div class="example">
+
+<pre>
+05:00
+新Daily期間開始
+
+↓
+
+まだ誰も遊んでいない
+Daily未生成
+
+↓
+
+08:00
+Current Version変更
+
+↓
+
+Dailyを生成しない
+
+↓
+
+当日Daily
+suspended
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+「Daily Configが存在しないから停止できない」
+という構造にはしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>41. 不具合による手動停止</h2>
+
+<div class="box">
+
+<p>
+管理画面のDailyページには
+以下の操作を用意する。
+</p>
+
+</div>
+
+<pre>
+本日のDaily
+
+状態
+● 利用可能
+
+[ 本日のDailyを停止する ]
+</pre>
+
+<hr>
+
+<h2>42. Daily停止確認</h2>
+
+<div class="warning">
+
+<p>
+Daily停止は
+その日の残り時間について取り消せない操作とするため、
+確認モーダルを表示する。
+</p>
+
+</div>
+
+<pre>
+本日のデイリーを停止しますか？
+
+停止すると、
+本日のデイリーには新しく挑戦できなくなります。
+
+既にプレイ中のデイリーも
+次回サーバー通信時に停止されます。
+
+このDailyは翌AM5:00まで再開できません。
+
+[ Dailyを停止する ]
+</pre>
+
+<hr>
+
+<h2>43. Daily停止の取り消し</h2>
+
+<div class="rule">
+
+<strong>
+一度停止したdaily_keyは再開しない。
+</strong>
+
+</div>
+
+<p>
+管理画面に
+「Dailyを再開する」
+ボタンは設置しない。
+</p>
+
+<pre>
+active
+↓
+suspended
+
+可能
+
+
+suspended
+↓
+active
+
+不可
+</pre>
+
+<hr>
+
+<h2>44. 翌日のDaily</h2>
+
+<div class="box">
+
+<p>
+停止状態はdaily_key単位で管理する。
+</p>
+
+</div>
+
+<pre>
+2026-07-29
+
+suspended
+
+
+↓
+
+翌日 JST 05:00
+
+
+2026-07-30
+
+新しいdaily_key
+
+↓
+
+通常状態
+</pre>
+
+<div class="rule">
+
+<p>
+前日のsuspended状態を
+翌日のDailyへ引き継がない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>45. Daily停止メッセージ</h2>
+
+<div class="rule">
+
+<p>
+Daily停止時のユーザー向けメッセージは
+以下で統一する。
+</p>
+
+</div>
+
+<pre>
+本日はカード更新もしくは不具合の影響で
+デイリーは停止されています。
+またAM5:00以降に遊びに来てください。
+</pre>
+
+<hr>
+
+<h2>46. モード選択画面でのDaily停止</h2>
+
+<div class="box">
+
+<p>
+Dailyが停止中の場合、
+モード選択画面のDailyボタンを非活性とする。
+</p>
+
+</div>
+
+<pre>
+[ ソロ ]
+
+[ デイリー ]  ← 非活性
+本日のデイリーは停止中です
+
+[ 2人出題 ]
+
+[ 2人対戦 ]
+</pre>
+
+<hr>
+
+<h2>47. Daily直リンク</h2>
+
+<div class="box">
+
+<p>
+停止中DailyへURLから直接アクセスした場合も、
+ゲームを開始させない。
+</p>
+
+</div>
+
+<pre>
+/daily
+
+↓
+
+Daily Status確認
+
+↓
+
+suspended
+
+↓
+
+停止画面
+</pre>
+
+<p>
+表示：
+</p>
+
+<pre>
+本日はカード更新もしくは不具合の影響で
+デイリーは停止されています。
+またAM5:00以降に遊びに来てください。
+</pre>
+
+<hr>
+
+<h2>48. DAILY_SUSPENDED</h2>
+
+<div class="box">
+
+<p>
+サーバー側では
+Daily停止を専用の状態として返す。
+</p>
+
+</div>
+
+<pre>
+errorCode:
+DAILY_SUSPENDED
+</pre>
+
+<div class="rule">
+
+<p>
+単なる500エラーとして扱わず、
+ユーザー向けDaily停止画面へ遷移できるようにする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>49. Daily停止判定はサーバー側でも行う</h2>
+
+<div class="warning">
+
+<p>
+Dailyボタンを非活性にするだけでは不十分である。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+Daily開始・再開・回答・ヒント等のサーバー処理でも
+当日の停止状態を確認する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>50. 停止後の進行中Daily</h2>
+
+<div class="box">
+
+<p>
+Daily停止が確定した場合、
+既に開始済みの当日Dailyも
+以後継続させない。
+</p>
+
+</div>
+
+<pre>
+Dailyプレイ中
+
+↓
+
+管理者がDaily停止
+
+↓
+
+次の回答 / ヒント / Resume等
+
+↓
+
+サーバー
+
+DAILY_SUSPENDED
+
+↓
+
+Daily停止画面
+</pre>
+
+<hr>
+
+<h2>51. 進行中Dailyの正解</h2>
+
+<div class="warning">
+
+<p>
+Daily停止によってゲームを中止した場合、
+正解カードを公開しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+通常の「降参」「10回失敗」等の結果画面へは移行せず、
+Daily停止画面へ移行する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>52. Daily停止と個人結果</h2>
+
+<div class="box">
+
+<p>
+Daily停止による中断を
+プレイヤーの失敗・降参として扱わない。
+</p>
+
+</div>
+
+<pre>
+endReason = surrender
+ではない
+
+endReason = failed
+ではない
+
+Dailyサービス停止
+</pre>
+
+<hr>
+
+<h2>53. Daily停止用データ</h2>
+
+<div class="box">
+
+<p>
+Daily Configとは別に、
+Daily生成前でも停止状態を保持できる構造を用意する。
+</p>
+
+</div>
+
+<p>
+D1テーブル例：
+</p>
+
+<pre>
+daily_controls
+
+daily_key
+status
+reason
+suspended_at
+suspended_by
+created_at
+</pre>
+
+<hr>
+
+<h2>54. daily_controls</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>daily_key</code></td>
+<td>JST 05:00区切りのDaily識別子</td>
+</tr>
+
+<tr>
+<td><code>status</code></td>
+<td>active / suspended</td>
+</tr>
+
+<tr>
+<td><code>reason</code></td>
+<td>card_update / bug</td>
+</tr>
+
+<tr>
+<td><code>suspended_at</code></td>
+<td>停止日時</td>
+</tr>
+
+<tr>
+<td><code>suspended_by</code></td>
+<td>systemまたは管理者識別</td>
+</tr>
+
+<tr>
+<td><code>created_at</code></td>
+<td>作成日時</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>55. Daily Configとの関係</h2>
+
+<div class="box">
+
+<pre>
+daily_controls
+↓
+本日のDailyを提供してよいか
+
+
+daily_configs
+↓
+生成済みDailyの
+Version・正解等
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+Daily停止状態と
+Daily問題データを分離する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>56. メンテナンスモード</h2>
+
+<div class="box">
+
+<p>
+サービス全体に作業が必要な場合に備え、
+簡易メンテナンスモードを用意する。
+</p>
+
+</div>
+
+<pre>
+サービス状態
+
+● 通常運転
+
+[ メンテナンスにする ]
+</pre>
+
+<hr>
+
+<h2>57. メンテナンスON</h2>
+
+<div class="box">
+
+<p>
+メンテナンスONでは、
+新しいゲームの開始を停止する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>操作</th>
+<th>メンテナンス中</th>
+</tr>
+
+<tr>
+<td>新規Solo開始</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>新規Daily開始</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>新規2人出題作成</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>新規Battle作成</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>未開始Battleへの新規参加</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>未開始ゲームの開始</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>既に進行中のゲーム</td>
+<td>継続可能</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>58. 進行中ゲームを強制終了しない</h2>
+
+<div class="rule">
+
+<strong>
+通常のメンテナンスONでは、
+既にplaying状態のゲームを強制終了しない。
+</strong>
+
+</div>
+
+<pre>
+Battle中
+
+↓
+
+管理者
+メンテナンスON
+
+↓
+
+Battle継続可能
+</pre>
+
+<hr>
+
+<h2>59. メンテナンスの目的</h2>
+
+<div class="box">
+
+<p>
+メンテナンスモードは
+「これ以上新しいゲームを増やさない」
+ための運営機能とする。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+全ゲームを即時停止する
+「緊急停止機能」は初期版では実装しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>60. メンテナンス解除</h2>
+
+<div class="box">
+
+<pre>
+サービス状態
+
+● メンテナンス中
+
+[ メンテナンスを終了する ]
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+メンテナンスはDaily停止とは異なり、
+管理者が解除可能とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>61. Daily停止とメンテナンスの違い</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>Daily停止</th>
+<th>メンテナンス</th>
+</tr>
+
+<tr>
+<td>対象</td>
+<td>Dailyのみ</td>
+<td>新規ゲーム全般</td>
+</tr>
+
+<tr>
+<td>進行中Daily</td>
+<td>停止</td>
+<td>原則継続</td>
+</tr>
+
+<tr>
+<td>進行中Battle</td>
+<td>影響なし</td>
+<td>継続</td>
+</tr>
+
+<tr>
+<td>当日中の解除</td>
+<td>不可</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>翌05:00</td>
+<td>新daily_keyで解除</td>
+<td>自動解除しない</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>62. 運営設定</h2>
+
+<div class="box">
+
+<p>
+管理画面から変更可能な設定は
+必要最小限とする。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>設定</th>
+<th>変更</th>
+</tr>
+
+<tr>
+<td>contactUrl</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>メンテナンスモード</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>最大回答回数</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>Battle手番時間</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>再接続猶予</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>Rotationパック数</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>Daily切替時刻</td>
+<td>不可</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>63. ゲームルールを管理画面から変更しない</h2>
+
+<div class="rule">
+
+<p>
+以下のゲームルールは
+初期版の管理画面ではRead Onlyとする。
+</p>
+
+</div>
+
+<pre>
+最大回答回数
+10
+
+Battle手番
+120秒
+
+再接続
+30秒
+
+Rotation
+最新6パック
+
+Daily
+JST 05:00
+</pre>
+
+<hr>
+
+<h2>64. ルール値の表示</h2>
+
+<div class="box">
+
+<p>
+障害確認・運営確認のため
+現在設定されている値を
+管理画面へ表示してもよい。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+表示は可能だが編集フォームにはしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>65. contactUrl</h2>
+
+<div class="box">
+
+<p>
+データ不具合等のエラー画面から利用する
+問い合わせ先URLは管理画面で変更可能とする。
+</p>
+
+</div>
+
+<pre>
+お問い合わせURL
+
+[ https://example.com/contact ]
+
+[ 保存 ]
+</pre>
+
+<hr>
+
+<h2>66. contactUrl変更</h2>
+
+<div class="rule">
+
+<ul>
+<li>URL形式を検証する。</li>
+<li>不正な値を保存しない。</li>
+<li>変更操作を監査ログへ残す。</li>
+<li>旧値と新値を確認可能にする。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>67. operator_settings</h2>
+
+<div class="box">
+
+<p>
+管理画面から変更可能な運営設定は
+D1の運営設定テーブルで管理する。
+</p>
+
+</div>
+
+<pre>
+operator_settings
+
+setting_key
+setting_value
+updated_at
+updated_by
+</pre>
+
+<div class="example">
+
+<pre>
+contact_url
+
+maintenance_mode
+</pre>
+
+</div>
+
+<hr>
+
+<h2>68. Error Logs</h2>
+
+<div class="box">
+
+<p>
+03・06で保存された
+<code>error_logs</code>
+を管理画面から閲覧可能とする。
+</p>
+
+</div>
+
+<pre>
+Error Logs
+
+SG-20260729-A1B2C3
+CARD_DATA_INVALID
+Solo
+2026-07-29 14:32
+
+SG-20260729-D4E5F6
+GAME_STATE_INVALID
+Battle
+2026-07-29 14:18
+</pre>
+
+<hr>
+
+<h2>69. エラーログ検索</h2>
+
+<div class="box">
+
+<p>
+以下の条件で検索・絞り込み可能とする。
+</p>
+
+</div>
+
+<ul>
+<li>errorId。</li>
+<li>errorCode。</li>
+<li>発生日時。</li>
+<li>ゲームモード。</li>
+<li>dataVersion。</li>
+<li>gameId。</li>
+<li>roomId。</li>
+</ul>
+
+<hr>
+
+<h2>70. エラー詳細</h2>
+
+<div class="box">
+
+<pre>
+Error ID
+SG-20260729-A1B2C3
+
+Error Code
+CARD_DATA_INVALID
+
+Occurred
+2026-07-29 14:32:12
+
+Mode
+Solo
+
+Data Version
+2026-07-29-01
+
+Game ID
+...
+
+Invalid Field
+atk
+
+Guessed Card ID
+...
+</pre>
+
+</div>
+
+<hr>
+
+<h2>71. 管理者向けエラー情報</h2>
+
+<div class="box">
+
+<p>
+一般ユーザー画面より詳しい調査情報を
+管理画面では表示可能とする。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+ただし管理画面であっても、
+以下を記録・表示する必要はない。
+</p>
+
+<ul>
+<li>sessionToken。</li>
+<li>reconnectToken。</li>
+<li>Cloudflare秘密鍵。</li>
+<li>API Secret。</li>
+<li>その他認証秘密情報。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>72. エラーログ編集</h2>
+
+<div class="rule">
+
+<strong>
+初期版のerror_logsはRead Onlyとする。
+</strong>
+
+</div>
+
+<p>
+管理画面からログ内容を書き換えたり削除したりしない。
+</p>
+
+<hr>
+
+<h2>73. エラー件数表示</h2>
+
+<div class="box">
+
+<p>
+Dashboardには障害の早期発見用として、
+直近のエラー件数を表示する。
+</p>
+
+</div>
+
+<pre>
+直近24時間
+
+Data Error
+2件
+
+Game State Error
+1件
+</pre>
+
+<div class="notice">
+
+<p>
+本格的な監視・通知システムは
+初期版管理画面の必須機能とはしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>74. 管理操作監査ログ</h2>
+
+<div class="box">
+
+<p>
+ゲームデータや運営状態へ影響する
+重要な管理操作は
+Shado Guesser独自の監査ログへ保存する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>
+admin_audit_logs
+</strong>
+
+</div>
+
+<hr>
+
+<h2>75. 監査対象操作</h2>
+
+<div class="box">
+
+<ul>
+<li>Version Published。</li>
+<li>Current Version変更。</li>
+<li>Versionロールバック。</li>
+<li>Daily手動停止。</li>
+<li>メンテナンスON。</li>
+<li>メンテナンスOFF。</li>
+<li>contactUrl変更。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>76. admin_audit_logs</h2>
+
+<div class="box">
+
+<pre>
+admin_audit_logs
+
+audit_id
+occurred_at
+actor_id
+actor_email
+action
+target_type
+target_id
+before_json
+after_json
+request_id
+</pre>
+
+</div>
+
+<hr>
+
+<h2>77. 監査ログ例</h2>
+
+<div class="example">
+
+<pre>
+occurred_at
+2026-07-29 13:00:12
+
+actor
+admin@example.com
+
+action
+VERSION_SET_CURRENT
+
+before
+2026-07-28-01
+
+after
+2026-07-29-01
+</pre>
+
+</div>
+
+<hr>
+
+<h2>78. Daily自動停止の監査</h2>
+
+<div class="box">
+
+<p>
+Current Version変更に伴うDaily自動停止も
+監査可能な状態にする。
+</p>
+
+</div>
+
+<pre>
+action
+DAILY_SUSPEND
+
+actor
+system
+
+reason
+card_update
+</pre>
+
+<hr>
+
+<h2>79. 監査ログの編集</h2>
+
+<div class="rule">
+
+<strong>
+監査ログは管理画面から編集・削除しない。
+</strong>
+
+</div>
+
+<hr>
+
+<h2>80. 管理者識別</h2>
+
+<div class="box">
+
+<p>
+監査ログのactorには、
+Cloudflare Access等で認証された管理者識別情報を利用する。
+</p>
+
+</div>
+
+<p>
+独自のプレイヤーアカウントIDとは関連付けない。
+</p>
+
+<hr>
+
+<h2>81. Current変更処理の一貫性</h2>
+
+<div class="box">
+
+<p>
+Current Version変更では、
+Version変更だけ成功してDaily停止だけ失敗するような
+中途半端な状態を避ける。
+</p>
+
+</div>
+
+<pre>
+Current変更
+
++
+
+Daily停止
+
++
+
+監査ログ
+
+↓
+
+1つの管理操作として処理
+</pre>
+
+<div class="rule">
+
+<p>
+可能な範囲で同一のDBトランザクション単位として実行する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>82. Current変更処理</h2>
+
+<div class="box">
+
+<pre>
+Admin Request
+
+↓
+
+管理者認証
+
+↓
+
+requestId確認
+
+↓
+
+対象Version確認
+
+↓
+
+Published確認
+
+↓
+
+Validation確認
+
+↓
+
+Current変更
+
+↓
+
+本日のDailyをsuspended
+
+reason = card_update
+
+↓
+
+Audit Log
+
+↓
+
+成功レスポンス
+</pre>
+
+</div>
+
+<hr>
+
+<h2>83. Daily手動停止処理</h2>
+
+<div class="box">
+
+<pre>
+Admin
+
+[ Dailyを停止する ]
+
+↓
+
+確認
+
+↓
+
+Admin API
+
+↓
+
+Access認証
+
+↓
+
+現在daily_key取得
+
+↓
+
+既にsuspended？
+
+YES
+→ 既存結果を返す
+
+
+NO
+↓
+
+suspended
+
+reason = bug
+
+↓
+
+Audit Log
+
+↓
+
+完了
+</pre>
+
+</div>
+
+<hr>
+
+<h2>84. 管理操作requestId</h2>
+
+<div class="box">
+
+<p>
+06のゲーム操作と同様に、
+重要な管理操作にも
+<code>requestId</code>
+を付ける。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+管理者がボタンを連打しても
+同じCurrent変更・Daily停止等を
+二重実行しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>85. 確認モーダル</h2>
+
+<div class="box">
+
+<p>
+不可逆または影響範囲の大きい管理操作には
+確認モーダルを使用する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>操作</th>
+<th>確認</th>
+</tr>
+
+<tr>
+<td>Version公開</td>
+<td>必要</td>
+</tr>
+
+<tr>
+<td>Current変更</td>
+<td>必要</td>
+</tr>
+
+<tr>
+<td>Daily停止</td>
+<td>必要</td>
+</tr>
+
+<tr>
+<td>メンテナンスON</td>
+<td>必要</td>
+</tr>
+
+<tr>
+<td>メンテナンスOFF</td>
+<td>簡易確認でも可</td>
+</tr>
+
+<tr>
+<td>カード検索</td>
+<td>不要</td>
+</tr>
+
+<tr>
+<td>エラーログ閲覧</td>
+<td>不要</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>86. 管理画面で「OK」だけを使用しない</h2>
+
+<div class="box">
+
+<pre>
+避ける：
+
+[ OK ]
+
+
+使用：
+
+[ Versionを公開する ]
+
+[ Currentを変更する ]
+
+[ Dailyを停止する ]
+
+[ メンテナンスにする ]
+</pre>
+
+</div>
+
+<hr>
+
+<h2>87. 管理API</h2>
+
+<div class="box">
+
+<p>
+管理APIは一般ゲームAPIと
+論理的に分離する。
+</p>
+
+</div>
+
+<pre>
+/api/v1/...
+一般ゲームAPI
+
+
+/admin/api/v1/...
+管理API
+</pre>
+
+<hr>
+
+<h2>88. 管理API例</h2>
+
+<div class="box">
+
+<pre>
+GET
+/admin/api/v1/dashboard
+
+
+GET
+/admin/api/v1/versions
+
+
+GET
+/admin/api/v1/versions/{versionId}
+
+
+POST
+/admin/api/v1/versions/{versionId}/validate
+
+
+POST
+/admin/api/v1/versions/{versionId}/publish
+
+
+POST
+/admin/api/v1/versions/{versionId}/set-current
+
+
+GET
+/admin/api/v1/cards
+
+
+GET
+/admin/api/v1/daily/current
+
+
+POST
+/admin/api/v1/daily/current/suspend
+
+
+GET
+/admin/api/v1/errors
+
+
+GET
+/admin/api/v1/errors/{errorId}
+
+
+GET
+/admin/api/v1/settings
+
+
+POST
+/admin/api/v1/settings/contact-url
+
+
+POST
+/admin/api/v1/settings/maintenance
+
+
+GET
+/admin/api/v1/audit-logs
+</pre>
+
+</div>
+
+<div class="notice">
+
+<p>
+具体的なURL名称は実装時に整理可能とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>89. GETで状態変更しない</h2>
+
+<div class="warning">
+
+<pre>
+禁止：
+
+GET
+/admin/set-current?id=...
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+状態変更操作は
+POST等の明示的な変更リクエストとして実装する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>90. CSRF等への対策</h2>
+
+<div class="box">
+
+<p>
+管理APIはブラウザ認証を伴うため、
+管理者が意図しない外部サイトから
+変更要求を実行されないようにする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>Access認証確認。</li>
+<li>同一Originを基本とする。</li>
+<li>Origin等の検証。</li>
+<li>状態変更APIにCSRF対策を適用。</li>
+<li>GETで変更処理を行わない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>91. 管理画面のキャッシュ</h2>
+
+<div class="rule">
+
+<p>
+管理画面の状態・エラーログ・Daily情報等を
+一般CDNキャッシュへ長時間残さない。
+</p>
+
+</div>
+
+<pre>
+Cache-Control: no-store
+</pre>
+
+<hr>
+
+<h2>92. 管理画面からゲームDOを直接編集しない</h2>
+
+<div class="box">
+
+<p>
+初期版では、
+進行中ゲームの内部状態を管理画面から
+書き換える機能を作成しない。
+</p>
+
+</div>
+
+<ul>
+<li>回答回数を増減しない。</li>
+<li>正解カードを変更しない。</li>
+<li>Battle勝敗を変更しない。</li>
+<li>手番を強制変更しない。</li>
+<li>履歴を削除しない。</li>
+</ul>
+
+<hr>
+
+<h2>93. 進行中ゲーム一覧</h2>
+
+<div class="rule">
+
+<p>
+初期版では
+全進行中ゲームを管理画面へ一覧表示する機能を必須としない。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+障害調査で必要となった場合は、
+gameId / roomId指定による状態確認機能を
+将来的に追加可能とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>94. 管理画面と秘密情報</h2>
+
+<div class="warning">
+
+<p>
+管理画面にも以下の秘密情報を表示しない。
+</p>
+
+<ul>
+<li>sessionToken。</li>
+<li>reconnectToken。</li>
+<li>API Secret。</li>
+<li>Cloudflare Secret。</li>
+<li>秘密鍵。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>95. HTMLへ秘密情報を埋め込まない</h2>
+
+<div class="box">
+
+<pre>
+禁止：
+
+&lt;script&gt;
+
+const ADMIN_SECRET = "...";
+
+&lt;/script&gt;
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+管理権限は
+クライアントJavaScript内の秘密値で保護しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>96. 管理画面のレスポンシブ</h2>
+
+<div class="box">
+
+<p>
+管理画面もPC・スマートフォンで閲覧可能とする。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+ただしカードVersion公開等の重要運営操作は
+PC利用を主用途として設計してよい。
+</p>
+
+</div>
+
+<hr>
+
+<h2>97. モバイルでの誤操作防止</h2>
+
+<div class="rule">
+
+<ul>
+<li>重要ボタンを小さく配置しない。</li>
+<li>Current変更等をワンタップ確定しない。</li>
+<li>確認モーダルを必須とする。</li>
+<li>隣接する危険操作を密集させない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>98. 管理画面のCSS</h2>
+
+<div class="box">
+
+<p>
+一般ゲームと同様に、
+管理画面固有のクラスには
+衝突しにくいプレフィックスを利用する。
+</p>
+
+</div>
+
+<pre>
+sg-admin-
+</pre>
+
+<div class="example">
+
+<pre>
+sg-admin-dashboard
+
+sg-admin-version-list
+
+sg-admin-warning
+
+sg-admin-action-button
+</pre>
+
+</div>
+
+<hr>
+
+<h2>99. 管理画面で行わないこと</h2>
+
+<div class="box">
+
+<ul>
+<li>カードマスターの直接編集。</li>
+<li>Published Versionの書き換え。</li>
+<li>Daily正解の途中変更。</li>
+<li>Daily正解の再抽選。</li>
+<li>Daily Revision作成。</li>
+<li>停止したDailyの当日再開。</li>
+<li>ゲームルール数値の自由変更。</li>
+<li>進行中ゲームの回答回数変更。</li>
+<li>対戦勝敗の手動変更。</li>
+<li>プレイヤー戦績管理。</li>
+<li>一般ユーザー管理。</li>
+<li>秘密Tokenの表示。</li>
+<li>監査ログの編集・削除。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>100. 04へ追加される運営用データ</h2>
+
+<div class="box">
+
+<p>
+07の管理機能により、
+04のカードデータ系テーブルとは別に
+以下の運営用D1テーブルが必要となる。
+</p>
+
+</div>
+
+<pre>
+daily_controls
+
+operator_settings
+
+admin_audit_logs
+</pre>
+
+<div class="notice">
+
+<p>
+これらはカードマスターそのものではなく
+運営状態を管理するテーブルである。
+</p>
+
+<p>
+04を最終統合する際には
+D1テーブル一覧へ追記する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>101. daily_controls確定用途</h2>
+
+<div class="box">
+
+<p>
+Dailyの問題内容ではなく、
+「そのdaily_keyを提供してよいか」
+を管理する。
+</p>
+
+</div>
+
+<pre>
+daily_key
+status
+reason
+suspended_at
+suspended_by
+created_at
+</pre>
+
+<hr>
+
+<h2>102. operator_settings確定用途</h2>
+
+<div class="box">
+
+<p>
+管理画面から変更可能な少数の運営設定を管理する。
+</p>
+
+</div>
+
+<pre>
+contact_url
+
+maintenance_mode
+</pre>
+
+<hr>
+
+<h2>103. admin_audit_logs確定用途</h2>
+
+<div class="box">
+
+<p>
+管理者またはシステムが実施した
+重要な運営変更を記録する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>104. 08との関係</h2>
+
+<div class="box">
+
+<p>
+カードデータの取得・Import・正規化・Validation・
+検索Index生成・Version作成については
+08 データ更新手順で定義する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+07は、
+08で作られたDraft Versionを確認・検証・公開する
+運営UIを担当する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>105. Version公開フロー</h2>
+
+<div class="box">
+
+<pre>
+08
+
+Source Data
+
+↓
+
+Import
+
+↓
+
+Normalize
+
+↓
+
+Draft Version
+
+↓
+
+Validation
+
+↓
+
+Search Index
+
+
+          ↓
+
+
+07 Admin
+
+Draft確認
+
+↓
+
+Validation結果確認
+
+↓
+
+Publish
+
+↓
+
+Published
+
+↓
+
+Current変更
+
+↓
+
+当日のDaily自動停止
+
+↓
+
+新規ゲームへ適用
+</pre>
+
+</div>
+
+<hr>
+
+<h2>106. Dailyの通常フロー</h2>
+
+<div class="box">
+
+<pre>
+JST 05:00
+
+↓
+
+新daily_key
+
+↓
+
+停止記録なし
+
+↓
+
+最初のDailyアクセス
+
+↓
+
+Daily Config生成
+
+↓
+
+active
+
+↓
+
+通常プレイ
+</pre>
+
+</div>
+
+<hr>
+
+<h2>107. Dailyカード更新フロー</h2>
+
+<div class="box">
+
+<pre>
+Daily active
+
+↓
+
+管理者がCurrent Version変更
+
+↓
+
+Daily suspended
+
+reason = card_update
+
+↓
+
+Dailyボタン非活性
+
+↓
+
+直リンク拒否
+
+↓
+
+進行中Dailyも次回通信時停止
+
+↓
+
+翌AM5:00
+新daily_key
+
+↓
+
+通常Daily
+</pre>
+
+</div>
+
+<hr>
+
+<h2>108. Daily不具合フロー</h2>
+
+<div class="box">
+
+<pre>
+不具合発覚
+
+↓
+
+Admin
+
+本日のDailyを停止する
+
+↓
+
+確認モーダル
+
+↓
+
+suspended
+
+reason = bug
+
+↓
+
+当日再開不可
+
+↓
+
+翌AM5:00
+通常状態
+</pre>
+
+</div>
+
+<hr>
+
+<h2>109. Daily停止表示</h2>
+
+<div class="rule">
+
+<strong>
+以下の文言を正式なDaily停止メッセージとする。
+</strong>
+
+</div>
+
+<pre>
+本日はカード更新もしくは不具合の影響で
+デイリーは停止されています。
+またAM5:00以降に遊びに来てください。
+</pre>
+
+<hr>
+
+<h2>110. 管理画面の状態表示</h2>
+
+<div class="box">
+
+<p>
+色だけで状態を表現せず、
+文字でも状態を表示する。
+</p>
+
+</div>
+
+<pre>
+● 利用可能
+
+● 停止中
+
+● メンテナンス中
+
+● Validation Error
+</pre>
+
+<hr>
+
+<h2>111. 管理操作中</h2>
+
+<div class="box">
+
+<p>
+Current変更やDaily停止等の処理中は
+同じ操作を連打できないようにする。
+</p>
+
+</div>
+
+<pre>
+[ Dailyを停止する ]
+
+↓
+
+[ 処理中... ]
+
+↓
+
+disabled
+</pre>
+
+<hr>
+
+<h2>112. 管理操作失敗時</h2>
+
+<div class="box">
+
+<p>
+管理操作の通信が失敗した場合、
+クライアントだけで成功したことにしない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>サーバー状態を再取得する。</li>
+<li>requestIdで処理済みか確認可能とする。</li>
+<li>成功していなければ再試行可能とする。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>113. Current切替失敗時</h2>
+
+<div class="warning">
+
+<p>
+Current Versionだけ変わった、
+Daily停止だけ行われた、
+監査ログだけ残った、
+といった不整合を可能な限り発生させない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+関連するD1更新を同じ管理処理単位として扱う。
+</p>
+
+</div>
+
+<hr>
+
+<h2>114. Dashboard更新</h2>
+
+<div class="box">
+
+<p>
+管理操作成功後は
+Dashboardや該当ページを
+サーバー最新状態へ更新する。
+</p>
+
+</div>
+
+<pre>
+Current変更
+
+↓
+
+成功
+
+↓
+
+Version一覧再取得
+
+↓
+
+Daily状態再取得
+
+↓
+
+Dashboard更新
+</pre>
+
+<hr>
+
+<h2>115. 管理画面のSource of Truth</h2>
+
+<div class="rule">
+
+<p>
+管理画面表示も
+ブラウザ内の古い状態ではなく
+サーバー/D1の正式状態を基準とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>116. 管理画面での時刻</h2>
+
+<div class="box">
+
+<p>
+Dailyに関する日付は
+JST 05:00基準で表示する。
+</p>
+
+<p>
+ログ日時は管理者が理解しやすいよう
+JST表示を基本とする。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+DB内部時刻は06で定義したUTCベースを維持する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>117. 07で確定した管理画面</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>確定仕様</th>
+</tr>
+
+<tr>
+<td>管理画面</td>
+<td>一般ゲーム画面から分離</td>
+</tr>
+
+<tr>
+<td>認証</td>
+<td>Cloudflare Access等</td>
+</tr>
+
+<tr>
+<td>独自管理者パスワード</td>
+<td>作らない</td>
+</tr>
+
+<tr>
+<td>管理権限</td>
+<td>初期版1種類</td>
+</tr>
+
+<tr>
+<td>管理API</td>
+<td>認証必須</td>
+</tr>
+
+<tr>
+<td>Dashboard</td>
+<td>あり</td>
+</tr>
+
+<tr>
+<td>カード直接編集</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>カードデータ閲覧</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>Draft Validation</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>Validation失敗Version</td>
+<td>公開不可</td>
+</tr>
+
+<tr>
+<td>Version Publish</td>
+<td>管理画面から可能</td>
+</tr>
+
+<tr>
+<td>Published Version</td>
+<td>不変</td>
+</tr>
+
+<tr>
+<td>Current Version</td>
+<td>Publishedから1つ</td>
+</tr>
+
+<tr>
+<td>Current変更</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>ロールバック</td>
+<td>過去PublishedをCurrentへ指定</td>
+</tr>
+
+<tr>
+<td>進行中ゲーム</td>
+<td>Current変更の影響なし</td>
+</tr>
+
+<tr>
+<td>Current変更</td>
+<td>当日のDailyを自動停止</td>
+</tr>
+
+<tr>
+<td>Publishのみ</td>
+<td>Dailyを停止しない</td>
+</tr>
+
+<tr>
+<td>Daily生成</td>
+<td>最初のアクセス時</td>
+</tr>
+
+<tr>
+<td>Daily事前生成</td>
+<td>初期版なし</td>
+</tr>
+
+<tr>
+<td>Daily正解閲覧</td>
+<td>管理者のみ可能</td>
+</tr>
+
+<tr>
+<td>Daily正解変更</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>Daily Revision</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>Daily再抽選</td>
+<td>なし</td>
+</tr>
+
+<tr>
+<td>Daily手動停止</td>
+<td>可能</td>
+</tr>
+
+<tr>
+<td>Daily停止理由</td>
+<td>card_update / bug</td>
+</tr>
+
+<tr>
+<td>Daily停止後の再開</td>
+<td>当日不可</td>
+</tr>
+
+<tr>
+<td>Daily停止解除</td>
+<td>翌JST 05:00の新daily_key</td>
+</tr>
+
+<tr>
+<td>Daily停止中ボタン</td>
+<td>非活性</td>
+</tr>
+
+<tr>
+<td>Daily直リンク</td>
+<td>DAILY_SUSPENDED</td>
+</tr>
+
+<tr>
+<td>進行中Daily</td>
+<td>停止後は継続不可</td>
+</tr>
+
+<tr>
+<td>Daily停止時の正解公開</td>
+<td>しない</td>
+</tr>
+
+<tr>
+<td>Daily停止時の失敗扱い</td>
+<td>しない</td>
+</tr>
+
+<tr>
+<td>メンテナンス</td>
+<td>ON/OFF可能</td>
+</tr>
+
+<tr>
+<td>メンテナンス中</td>
+<td>新規ゲーム開始不可</td>
+</tr>
+
+<tr>
+<td>進行中ゲーム</td>
+<td>メンテナンス中も継続</td>
+</tr>
+
+<tr>
+<td>緊急全停止</td>
+<td>初期版なし</td>
+</tr>
+
+<tr>
+<td>ゲームルール変更</td>
+<td>管理画面から不可</td>
+</tr>
+
+<tr>
+<td>contactUrl</td>
+<td>変更可能</td>
+</tr>
+
+<tr>
+<td>error_logs</td>
+<td>閲覧・検索可能</td>
+</tr>
+
+<tr>
+<td>error_logs編集</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>重要管理操作</td>
+<td>監査ログ保存</td>
+</tr>
+
+<tr>
+<td>監査ログ編集</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>進行中ゲーム編集</td>
+<td>不可</td>
+</tr>
+
+<tr>
+<td>ユーザー管理</td>
+<td>なし</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>118. 追加D1テーブル</h2>
+
+<div class="box">
+
+<p>
+07により追加で必要となる運営系テーブルは以下とする。
+</p>
+
+</div>
+
+<pre>
+daily_controls
+
+operator_settings
+
+admin_audit_logs
+</pre>
+
+<div class="notice">
+
+<p>
+08作成後に01〜08全体の整合性確認を行う際、
+04_DataDesign.htmlのD1テーブル一覧にも正式反映する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>119. 08へ引き継ぐ内容</h2>
+
+<div class="box">
+
+<p>
+08では以下を定義する。
+</p>
+
+</div>
+
+<ul>
+<li>元カードデータの取得方法。</li>
+<li>Import方法。</li>
+<li>正規化。</li>
+<li>カードセット情報。</li>
+<li>TYPE変換。</li>
+<li>tribes変換。</li>
+<li>keyword抽出。</li>
+<li>画像参照生成。</li>
+<li>Draft Version生成。</li>
+<li>Validation。</li>
+<li>検索Index生成。</li>
+<li>Publishedまでの更新フロー。</li>
+<li>Current変更時のDaily自動停止との連携。</li>
+</ul>
+
+<hr>
+
+<h2>120. 最終方針</h2>
+
+<div class="rule">
+
+<p>
+Shado Guesserの管理画面は
+<strong>「直接データを書き換える画面」ではなく、
+安全に公開・停止・確認を行う運営画面</strong>
+とする。
+</p>
+
+</div>
+
+<pre>
+カードデータ変更
+
+↓
+
+08の更新フロー
+
+
+          ↓
+
+
+07 管理画面
+
+確認
+Validation
+Publish
+Current切替
+Daily停止
+エラー確認
+メンテナンス
+
+
+          ↓
+
+
+一般ゲーム
+</pre>
+
+<div class="rule">
+
+<p>
+運営者の操作によって
+Publishedデータ・進行中ゲーム・Dailyが
+不整合な状態になりにくい構造を優先する。
+</p>
+
+</div>
+
+<hr>
+
+<p class="small">
+Shado Guesser 基本設計書<br>
+07 管理画面・運営操作<br><br>
+©Shado Guesser
+</p>
+
+</body>
+</html>

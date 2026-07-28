@@ -1,0 +1,3440 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Shado Guesser 基本設計書 - 03 判定仕様</title>
+
+<style>
+
+body{
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    color:#222;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+}
+
+h1{
+    border-bottom:4px solid #3f51b5;
+    padding-bottom:10px;
+}
+
+h2{
+    margin-top:45px;
+    border-left:8px solid #3f51b5;
+    padding-left:12px;
+}
+
+h3{
+    margin-top:30px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th,
+td{
+    border:1px solid #cccccc;
+    padding:10px;
+    vertical-align:top;
+}
+
+th{
+    background:#3f51b5;
+    color:white;
+}
+
+.box{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+}
+
+.notice{
+    background:#fff8e1;
+    border-left:6px solid #ffc107;
+    padding:15px;
+    margin-top:20px;
+}
+
+.rule{
+    background:#e8eaf6;
+    border-left:6px solid #3f51b5;
+    padding:15px;
+    margin-top:20px;
+}
+
+.warning{
+    background:#ffebee;
+    border-left:6px solid #d32f2f;
+    padding:15px;
+    margin-top:20px;
+}
+
+.example{
+    background:#e8f5e9;
+    border-left:6px solid #4caf50;
+    padding:15px;
+    margin-top:20px;
+}
+
+pre{
+    background:#222;
+    color:#f5f5f5;
+    padding:20px;
+    border-radius:8px;
+    overflow:auto;
+    line-height:1.6;
+}
+
+code{
+    background:#eeeeee;
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.small{
+    color:#777;
+    font-size:0.9em;
+}
+
+@media(max-width:700px){
+
+    body{
+        padding:18px;
+    }
+
+    table{
+        font-size:0.9em;
+    }
+
+    th,
+    td{
+        padding:7px;
+    }
+
+    pre{
+        padding:12px;
+        font-size:0.85em;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Shado Guesser 基本設計書</h1>
+
+<p>
+<strong>03：判定仕様</strong>
+</p>
+
+<p>
+本設計書では、Shado Guesserにおける
+正解カードと回答カードの比較方法、
+一致・部分一致・不一致、
+数値の大小判定、
+タイプ・キーワード能力の集合判定、
+特殊値「全て」、
+および判定不能なデータ異常発生時の処理を定義する。
+</p>
+
+<hr>
+
+<h2>1. 判定の基本方針</h2>
+
+<div class="box">
+
+<p>
+プレイヤーがカードを回答した場合、
+サーバーは回答カードと正解カードの
+Normalized Dataを比較し、
+各項目ごとの判定結果を生成する。
+</p>
+
+<p>
+生成された判定結果をブラウザへ返し、
+画面側で色・矢印等を表示する。
+</p>
+
+</div>
+
+<pre>
+プレイヤー
+
+カードを回答
+
+    ↓
+
+サーバー
+
+回答card_id確認
+正解card_id確認
+
+    ↓
+
+固定されたdata_version_idから
+カードデータ取得
+
+    ↓
+
+必須データ検証
+
+    ↓
+
+各項目を比較
+
+    ↓
+
+判定結果生成
+
+    ↓
+
+ブラウザへ返却
+
+    ↓
+
+履歴へ表示
+</pre>
+
+<hr>
+
+<h2>2. 正式な判定元</h2>
+
+<div class="box">
+
+<p>
+正式な回答判定は
+<strong>サーバー側</strong>
+で行う。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>ブラウザ側の判定結果を正式な値として信用しない。</li>
+<li>正解カードはサーバー側で保持する。</li>
+<li>回答card_idをサーバー側で検証する。</li>
+<li>回答可能範囲をサーバー側でも検証する。</li>
+<li>正式な判定結果はサーバーが生成する。</li>
+<li>ゲーム開始時に固定されたdata_version_idのデータを使用する。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>3. ゲームそのものの正解判定</h2>
+
+<div class="box">
+
+<p>
+ゲームの「正解」は、
+回答カードIDと正解カードIDが一致した場合のみ成立する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<pre>
+guessedCardId === answerCardId
+</pre>
+
+<p>
+の場合のみ正解とする。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+<code>guessedCardId</code>、
+<code>answerCardId</code>
+はゲーム状態上の概念名であり、
+カードを識別する元のIDは
+<code>card_id</code>
+である。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+各判定項目が偶然すべて一致している別カードが存在しても、
+card_idが異なる場合は正解とはしない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>4. 項目判定とゲーム正解判定の分離</h2>
+
+<div class="box">
+
+<p>
+「カードパックが一致」
+「コストが一致」
+「タイプが一致」
+等の項目判定と、
+ゲームそのものの正解判定は別処理とする。
+</p>
+
+</div>
+
+<pre>
+各項目
+
+カードパック：一致
+クラス：一致
+レアリティ：一致
+分類：一致
+タイプ：一致
+コスト：一致
+攻撃力：一致
+体力：一致
+キーワード：一致
+
+でも
+
+guessedCardId !== answerCardId
+
+↓
+
+ゲームとしては不正解
+</pre>
+
+<hr>
+
+<h2>5. 判定表示の基本状態</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>状態</th>
+<th>意味</th>
+</tr>
+
+<tr>
+<td>緑</td>
+<td>完全一致</td>
+</tr>
+
+<tr>
+<td>黄色</td>
+<td>一部一致</td>
+</tr>
+
+<tr>
+<td>灰色</td>
+<td>不一致</td>
+</tr>
+
+<tr>
+<td>▲</td>
+<td>正解カードの数値が回答カードより大きい</td>
+</tr>
+
+<tr>
+<td>▼</td>
+<td>正解カードの数値が回答カードより小さい</td>
+</tr>
+
+<tr>
+<td>－</td>
+<td>その比較を行わない / 比較対象外</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>6. 黄色を使用する項目</h2>
+
+<div class="box">
+
+<p>
+黄色の部分一致判定を使用するのは、
+複数値を持ちうる以下の項目のみとする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>タイプ。</li>
+<li>キーワード能力。</li>
+</ul>
+
+</div>
+
+<p>
+カードパック・クラス・レアリティ・分類等の
+単一値項目では黄色を使用しない。
+</p>
+
+<hr>
+
+<h2>7. 単一値項目</h2>
+
+<div class="box">
+
+<p>
+以下の項目は、
+原則として1つの判定値を持つものとして比較する。
+</p>
+
+<ul>
+<li>カードパック。</li>
+<li>クラス。</li>
+<li>レアリティ。</li>
+<li>分類。</li>
+</ul>
+
+</div>
+
+<div class="rule">
+
+<pre>
+回答値 === 正解値
+→ 緑
+
+回答値 !== 正解値
+→ 灰色
+</pre>
+
+</div>
+
+<hr>
+
+<h2>8. カードパック判定</h2>
+
+<div class="box">
+
+<p>
+カードパック判定では、
+画面上のカードパック区分として
+同一であるかを比較する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+判定用のカードパックIdentityは
+以下の考え方で生成する。
+</p>
+
+<pre>
+is_token === true
+
+↓
+
+TOKEN
+
+
+is_token === false
+AND
+card_set_id === 10000
+
+↓
+
+BASIC
+
+
+その他の通常カード
+
+↓
+
+CARD_SET:{card_set_id}
+</pre>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>判定</th>
+</tr>
+
+<tr>
+<td>同一通常カードパック</td>
+<td>同一通常カードパック</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>通常カードパックA</td>
+<td>通常カードパックB</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>ベーシック</td>
+<td>ベーシック</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>トークン</td>
+<td>トークン</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>トークン</td>
+<td>通常カードパック</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>ベーシック</td>
+<td>通常カードパック</td>
+<td>灰色</td>
+</tr>
+
+</table>
+
+<div class="warning">
+
+<p>
+Tokenのカードパック判定に
+<code>card_set_id</code>
+だけを直接使用しない。
+</p>
+
+<p>
+Tokenは
+<code>is_token=true</code>
+によって「トークン」として扱う。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+<code>card_set_id</code>
+の数値から
+「第○弾」等の意味を推測しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>9. クラス判定</h2>
+
+<div class="box">
+
+<p>
+Normalized Dataの
+<code>class</code>
+を比較する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>判定</th>
+</tr>
+
+<tr>
+<td>ロイヤル</td>
+<td>ロイヤル</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>エルフ</td>
+<td>ロイヤル</td>
+<td>灰色</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>10. レアリティ判定</h2>
+
+<div class="box">
+
+<p>
+Normalized Dataの
+<code>rarity</code>
+を比較する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>判定</th>
+</tr>
+
+<tr>
+<td>レジェンド</td>
+<td>レジェンド</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>ゴールド</td>
+<td>レジェンド</td>
+<td>灰色</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>11. 分類判定</h2>
+
+<div class="box">
+
+<p>
+画面上の「分類」は、
+04 データ設計で定義する
+Normalized Dataの
+<code>type</code>
+を使用する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<pre>
+type
+
+1 = フォロワー
+2 = スペル
+3 = アミュレット
+</pre>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>判定</th>
+</tr>
+
+<tr>
+<td>フォロワー</td>
+<td>フォロワー</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>スペル</td>
+<td>フォロワー</td>
+<td>灰色</td>
+</tr>
+
+</table>
+
+<div class="warning">
+
+<p>
+公式Source Dataの
+<code>type</code>
+値をそのまま判定に使用するのではなく、
+08で定義するImporterによって
+正常にNormalized Dataへ変換された値を使用する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>12. 数値判定</h2>
+
+<div class="box">
+
+<p>
+数値として大小関係を比較する項目では、
+回答値と正解値の関係に応じて
+▲・▼を表示する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<pre>
+回答値 &lt; 正解値
+→ ▲
+
+回答値 &gt; 正解値
+→ ▼
+
+回答値 === 正解値
+→ 緑・矢印なし
+</pre>
+
+</div>
+
+<hr>
+
+<h2>13. ▲の意味</h2>
+
+<div class="box">
+
+<p>
+▲は、
+<strong>正解カードの値がもっと大きい</strong>
+ことを意味する。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+回答コスト：4
+正解コスト：7
+
+↓
+
+4 &lt; 7
+
+↓
+
+▲
+</pre>
+
+</div>
+
+<hr>
+
+<h2>14. ▼の意味</h2>
+
+<div class="box">
+
+<p>
+▼は、
+<strong>正解カードの値がもっと小さい</strong>
+ことを意味する。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+回答コスト：8
+正解コスト：5
+
+↓
+
+8 &gt; 5
+
+↓
+
+▼
+</pre>
+
+</div>
+
+<hr>
+
+<h2>15. 数値一致</h2>
+
+<div class="box">
+
+<p>
+回答値と正解値が同一の場合は
+緑判定とする。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+回答コスト：5
+正解コスト：5
+
+↓
+
+緑
+
+矢印なし
+</pre>
+
+</div>
+
+<hr>
+
+<h2>16. コスト判定</h2>
+
+<div class="box">
+
+<p>
+<code>cost</code>
+はすべての正常なカードで数値比較する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>結果</th>
+</tr>
+
+<tr>
+<td>3</td>
+<td>5</td>
+<td>▲</td>
+</tr>
+
+<tr>
+<td>5</td>
+<td>5</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>7</td>
+<td>5</td>
+<td>▼</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>17. 攻撃力・体力の特殊ルール</h2>
+
+<div class="box">
+
+<p>
+攻撃力
+<code>atk</code>
+および体力
+<code>life</code>
+は、
+フォロワーカードでのみ
+ゲーム上意味を持つ数値として扱う。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>
+回答カードと正解カードの両方がフォロワーの場合のみ
+atk / lifeを数値比較する。
+</strong>
+
+</div>
+
+<hr>
+
+<h2>18. 両方フォロワーの場合</h2>
+
+<div class="box">
+
+<pre>
+回答：フォロワー
+正解：フォロワー
+
+↓
+
+atkを数値比較
+lifeを数値比較
+</pre>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答atk</th>
+<th>正解atk</th>
+<th>結果</th>
+</tr>
+
+<tr>
+<td>3</td>
+<td>5</td>
+<td>▲</td>
+</tr>
+
+<tr>
+<td>5</td>
+<td>5</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>7</td>
+<td>5</td>
+<td>▼</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>19. どちらかが非フォロワーの場合</h2>
+
+<div class="box">
+
+<p>
+回答カードまたは正解カードのどちらか一方でも
+非フォロワーの場合、
+atk / lifeの数値比較を行わない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<pre>
+攻撃力：－
+体力：－
+</pre>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>攻撃力</th>
+<th>体力</th>
+</tr>
+
+<tr>
+<td>フォロワー</td>
+<td>スペル</td>
+<td>－</td>
+<td>－</td>
+</tr>
+
+<tr>
+<td>アミュレット</td>
+<td>フォロワー</td>
+<td>－</td>
+<td>－</td>
+</tr>
+
+<tr>
+<td>スペル</td>
+<td>スペル</td>
+<td>－</td>
+<td>－</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>20. 非フォロワーのatk / life</h2>
+
+<div class="box">
+
+<p>
+公式Source Dataで、
+スペル・アミュレット等の
+atk / lifeに0が存在する場合でも、
+Shado GuesserのNormalized Dataでは
+非フォロワーのatk / lifeを
+<code>NULL</code>
+として扱う。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+Official Source
+
+type = 非Follower
+atk = 0
+life = 0
+
+
+↓
+
+Importer
+
+
+Normalized Data
+
+type = 非Follower
+atk = NULL
+life = NULL
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+画面上では
+</p>
+
+<pre>
+攻撃力：－
+体力：－
+</pre>
+
+<p>
+と表示する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+非フォロワーのSource上の0を、
+攻撃力0・体力0というゲーム上の数値として判定しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>21. タイプ判定</h2>
+
+<div class="box">
+
+<p>
+画面上の「タイプ」は、
+04 データ設計で定義する
+<code>tribes</code>
+および
+<code>card_tribes</code>
+を基準として判定する。
+</p>
+
+<p>
+タイプはカードによって複数の値を持つ可能性があるため、
+単一値ではなく集合として比較する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+画面上の
+<strong>「分類」</strong>
+と
+<strong>「タイプ」</strong>
+は別項目である。
+</p>
+
+<pre>
+画面「分類」
+→ Normalized Dataの type
+→ フォロワー / スペル / アミュレット
+
+
+画面「タイプ」
+→ tribes / card_tribes
+→ 宴楽 / 兵士 / 学園 等
+</pre>
+
+</div>
+
+<div class="rule">
+
+<pre>
+完全一致
+→ 緑
+
+一部でも共通タイプあり
+→ 黄色
+
+共通タイプなし
+→ 灰色
+</pre>
+
+</div>
+
+<hr>
+
+<h2>22. タイプの完全一致</h2>
+
+<div class="box">
+
+<p>
+回答カードと正解カードが
+同一のタイプ集合を持つ場合は緑とする。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+回答：
+宴楽・兵士
+
+正解：
+宴楽・兵士
+
+↓
+
+緑
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+内部的な並び順が異なっていても、
+持っているタイプ集合が同じなら完全一致とする。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+回答：
+宴楽・兵士
+
+正解：
+兵士・宴楽
+
+↓
+
+緑
+</pre>
+
+</div>
+
+<hr>
+
+<h2>23. タイプの部分一致</h2>
+
+<div class="box">
+
+<p>
+タイプ集合が完全には一致しないが、
+少なくとも1つ共通するタイプが存在する場合は
+黄色とする。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+回答：
+宴楽・兵士
+
+正解：
+宴楽・学園
+
+↓
+
+共通：
+宴楽
+
+↓
+
+黄色
+</pre>
+
+</div>
+
+<hr>
+
+<h2>24. タイプの不一致</h2>
+
+<div class="box">
+
+<p>
+共通タイプが1つも存在しない場合は
+灰色とする。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+回答：
+兵士
+
+正解：
+学園
+
+↓
+
+共通なし
+
+↓
+
+灰色
+</pre>
+
+</div>
+
+<hr>
+
+<h2>25. タイプなし</h2>
+
+<div class="box">
+
+<p>
+カードが通常タイプを持たない場合は、
+画面上では
+<strong>「－」</strong>
+と表示する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>判定</th>
+</tr>
+
+<tr>
+<td>－</td>
+<td>－</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>－</td>
+<td>宴楽</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>宴楽</td>
+<td>－</td>
+<td>灰色</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+内部的には
+「タイプなし」を
+空集合として扱える構造とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>26. タイプ「全て」</h2>
+
+<div class="box">
+
+<p>
+一部カードでは、
+タイプとして特殊な状態
+<strong>「全て」</strong>
+を持つ場合がある。
+</p>
+
+<p>
+「全て」は単なる通常タイプIDではなく、
+すべての通常タイプと意味上重複する
+特殊なタイプ状態として扱う。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+04 データ設計で定義する
+</p>
+
+<pre>
+tribe_mode = all
+</pre>
+
+<p>
+を使用する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+「全て」を、
+現在存在するすべてのtribe IDへ展開して保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>27. 「全て」同士</h2>
+
+<div class="box">
+
+<pre>
+回答：
+全て
+
+正解：
+全て
+
+↓
+
+完全一致
+
+↓
+
+緑
+</pre>
+
+</div>
+
+<hr>
+
+<h2>28. 「全て」と通常タイプ</h2>
+
+<div class="box">
+
+<p>
+「全て」は通常タイプすべてと意味上重複するため、
+通常タイプとの比較では部分一致となる。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>判定</th>
+</tr>
+
+<tr>
+<td>全て</td>
+<td>宴楽</td>
+<td>黄色</td>
+</tr>
+
+<tr>
+<td>宴楽</td>
+<td>全て</td>
+<td>黄色</td>
+</tr>
+
+<tr>
+<td>全て</td>
+<td>宴楽・兵士</td>
+<td>黄色</td>
+</tr>
+
+<tr>
+<td>宴楽・兵士</td>
+<td>全て</td>
+<td>黄色</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>29. 「全て」とタイプなし</h2>
+
+<div class="box">
+
+<p>
+タイプを持たないカードと
+「全て」を比較した場合、
+共通タイプは存在しないものとして扱う。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>判定</th>
+</tr>
+
+<tr>
+<td>全て</td>
+<td>－</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>－</td>
+<td>全て</td>
+<td>灰色</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>30. タイプ判定の正式ロジック</h2>
+
+<div class="box">
+
+<p>
+通常タイプ集合と
+<code>tribe_mode</code>
+を使用して以下の順序で判定する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<pre>
+1.
+回答 tribe_mode = all
+AND
+正解 tribe_mode = all
+
+→ match
+
+
+2.
+片方のみ tribe_mode = all
+AND
+もう片方に通常タイプあり
+
+→ partial
+
+
+3.
+片方のみ tribe_mode = all
+AND
+もう片方がタイプなし
+
+→ miss
+
+
+4.
+双方 normal
+AND
+通常タイプ集合が完全一致
+
+→ match
+
+
+5.
+双方 normal
+AND
+共通タイプが1つ以上
+
+→ partial
+
+
+6.
+その他
+
+→ miss
+</pre>
+
+</div>
+
+<hr>
+
+<h2>31. キーワード能力判定</h2>
+
+<div class="box">
+
+<p>
+キーワード能力も、
+1枚のカードが複数持つ可能性があるため
+集合として比較する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<pre>
+完全一致
+→ 緑
+
+一部共通
+→ 黄色
+
+共通なし
+→ 灰色
+</pre>
+
+</div>
+
+<hr>
+
+<h2>32. キーワード能力の完全一致</h2>
+
+<div class="example">
+
+<pre>
+回答：
+守護・突進
+
+正解：
+守護・突進
+
+↓
+
+緑
+</pre>
+
+</div>
+
+<p>
+能力の並び順が違っていても、
+集合が同じなら完全一致とする。
+</p>
+
+<hr>
+
+<h2>33. キーワード能力の部分一致</h2>
+
+<div class="example">
+
+<pre>
+回答：
+守護・突進
+
+正解：
+守護・疾走
+
+↓
+
+共通：
+守護
+
+↓
+
+黄色
+</pre>
+
+</div>
+
+<hr>
+
+<h2>34. キーワード能力の不一致</h2>
+
+<div class="example">
+
+<pre>
+回答：
+突進
+
+正解：
+守護
+
+↓
+
+共通なし
+
+↓
+
+灰色
+</pre>
+
+</div>
+
+<hr>
+
+<h2>35. キーワード能力なし</h2>
+
+<div class="box">
+
+<p>
+キーワード能力を持たないカードは、
+画面上では「－」として扱う。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>判定</th>
+</tr>
+
+<tr>
+<td>－</td>
+<td>－</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>－</td>
+<td>守護</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>守護</td>
+<td>－</td>
+<td>灰色</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+内部的には
+キーワード能力なしを空集合として扱える構造とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>36. タイプ・キーワードの判定単位</h2>
+
+<div class="box">
+
+<p>
+タイプ・キーワード能力については、
+個々の文字や各要素を別々に色分けするのではなく、
+項目全体として1つの判定状態を返す。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+タイプ：
+
+宴楽・兵士
+
+↓
+
+部分一致なら
+
+項目全体を黄色
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+「宴楽だけ緑、兵士だけ灰色」のような
+要素単位の色分けは基本仕様としない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>37. 能力・効果テキスト</h2>
+
+<div class="box">
+
+<p>
+カードの能力・効果テキストは
+プレイヤーへ情報として表示する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>能力・効果テキストは判定しない。</strong>
+
+<ul>
+<li>緑判定なし。</li>
+<li>黄色判定なし。</li>
+<li>灰色判定なし。</li>
+<li>正解判定には使用しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>38. 判定結果の基本構造</h2>
+
+<div class="box">
+
+<p>
+サーバーからブラウザへ返す判定結果は、
+各UI項目が判別可能な構造とする。
+</p>
+
+</div>
+
+<pre>
+概念例：
+
+{
+    pack: "match",
+    class: "miss",
+    rarity: "match",
+    classification: "match",
+    tribes: "partial",
+    cost: "higher",
+    atk: "lower",
+    life: "match",
+    keywords: "partial"
+}
+</pre>
+
+<div class="rule">
+
+<p>
+カードデータの正式名称に合わせ、
+攻撃力・体力は
+<code>atk</code> /
+<code>life</code>
+を使用する。
+</p>
+
+<p>
+画面上の「タイプ」は
+データ上の
+<code>tribes</code>
+と混同しない構造にする。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+APIレスポンス全体の具体的なJSON形式は
+06 サーバー・Cloudflare設計で定義する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>39. 判定状態</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>内部状態</th>
+<th>意味</th>
+</tr>
+
+<tr>
+<td><code>match</code></td>
+<td>完全一致</td>
+</tr>
+
+<tr>
+<td><code>partial</code></td>
+<td>部分一致</td>
+</tr>
+
+<tr>
+<td><code>miss</code></td>
+<td>不一致</td>
+</tr>
+
+<tr>
+<td><code>higher</code></td>
+<td>正解値の方が大きい</td>
+</tr>
+
+<tr>
+<td><code>lower</code></td>
+<td>正解値の方が小さい</td>
+</tr>
+
+<tr>
+<td><code>notApplicable</code></td>
+<td>比較対象外</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>40. 判定表示と内部状態</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>内部状態</th>
+<th>画面表示</th>
+</tr>
+
+<tr>
+<td>match</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>partial</td>
+<td>黄色</td>
+</tr>
+
+<tr>
+<td>miss</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>higher</td>
+<td>▲</td>
+</tr>
+
+<tr>
+<td>lower</td>
+<td>▼</td>
+</tr>
+
+<tr>
+<td>notApplicable</td>
+<td>－</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>41. 全ゲームモードで共通判定</h2>
+
+<div class="box">
+
+<p>
+カード比較ルールは、
+ゲームモードによって変更しない。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>モード</th>
+<th>判定ルール</th>
+</tr>
+
+<tr>
+<td>ソロ</td>
+<td>共通</td>
+</tr>
+
+<tr>
+<td>デイリー</td>
+<td>共通</td>
+</tr>
+
+<tr>
+<td>2人出題</td>
+<td>共通</td>
+</tr>
+
+<tr>
+<td>2人対戦</td>
+<td>共通</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>42. 時間切れランダム回答</h2>
+
+<div class="box">
+
+<p>
+2人対戦の時間切れにより
+サーバーがランダム回答を生成した場合も、
+通常回答と同じ判定ロジックを使用する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+時間切れ専用の別判定方式は設けない。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+02で定義したとおり、
+時間切れランダム回答の候補から
+正解カード自体は除外される。
+</p>
+
+</div>
+
+<hr>
+
+<h2>43. データ検証</h2>
+
+<div class="box">
+
+<p>
+判定処理を開始する前に、
+正しい判定を行うために必要な
+Normalized Dataが正常に存在することを確認する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+データが異常な場合に、
+推測や暫定値で判定を続行しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>44. 正常な「値なし」とデータ異常の区別</h2>
+
+<div class="box">
+
+<p>
+カード仕様上、
+値が存在しないことが正常な項目と、
+本来必要な値が欠損している異常状態を区別する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>例</th>
+<th>扱い</th>
+</tr>
+
+<tr>
+<td>スペルのatkがNULL</td>
+<td>正常。比較対象外「－」</td>
+</tr>
+
+<tr>
+<td>アミュレットのlifeがNULL</td>
+<td>正常。比較対象外「－」</td>
+</tr>
+
+<tr>
+<td>タイプを持たないカード</td>
+<td>正常。「－」</td>
+</tr>
+
+<tr>
+<td>キーワード能力を持たないカード</td>
+<td>正常。「－」</td>
+</tr>
+
+<tr>
+<td>フォロワーなのにatkがNULL</td>
+<td>異常</td>
+</tr>
+
+<tr>
+<td>フォロワーなのにlifeがNULL</td>
+<td>異常</td>
+</tr>
+
+<tr>
+<td>存在しないclassを参照</td>
+<td>異常</td>
+</tr>
+
+<tr>
+<td>存在しないcard_set_idを参照</td>
+<td>異常</td>
+</tr>
+
+<tr>
+<td>未知のNormalized type</td>
+<td>異常</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>45. 判定不能となるデータ異常</h2>
+
+<div class="box">
+
+<p>
+以下のような状態により正常な比較ができない場合、
+判定を中止する。
+</p>
+
+</div>
+
+<ul>
+<li>必要なカードデータが存在しない。</li>
+<li>必須項目が欠損している。</li>
+<li>必須項目が不正な型になっている。</li>
+<li>存在しないクラス・カードセット等を参照している。</li>
+<li>フォロワーのatk / lifeを取得できない。</li>
+<li>正解カードデータを取得できない。</li>
+<li>回答カードデータを取得できない。</li>
+<li>固定data_version_idのデータを取得できない。</li>
+<li>判定ロジックが正常に処理を完了できない。</li>
+</ul>
+
+<hr>
+
+<h2>46. データ異常時の基本処理</h2>
+
+<div class="box">
+
+<pre>
+データ異常検出
+
+↓
+
+回答判定を中止
+
+↓
+
+正常なGuessとして確定しない
+
+↓
+
+ゲームを正常状態として続行しない
+
+↓
+
+ゲームをerror状態へ
+
+↓
+
+一意のエラーIDを生成
+
+↓
+
+サーバーへエラーログ保存
+
+↓
+
+ユーザーへ安全なエラー画面表示
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+異常値を
+0・空文字・空配列・既定値・AI推測値等へ置き換えて
+ゲームを続行しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>47. データ異常時の回答扱い</h2>
+
+<div class="box">
+
+<p>
+正常な判定を完了できなかった回答を、
+通常の成功したGuessとして扱わない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>正常な判定結果として履歴へ追加しない。</li>
+<li>誤った比較結果を表示しない。</li>
+<li>通常の不正解として回答回数だけ消費しない。</li>
+<li>通常の勝利・敗北・失敗として処理しない。</li>
+<li>ゲームをerror状態へ移行する。</li>
+</ul>
+
+</div>
+
+<div class="notice">
+
+<p>
+回答状態更新と判定処理をどの単位で
+原子的に確定するかは
+06 サーバー・Cloudflare設計で定義する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>48. エラーのサーバーログ保存</h2>
+
+<div class="box">
+
+<p>
+判定不能なデータ異常が発生した場合、
+運営側で原因を追跡できるよう
+サーバー側へ詳細なエラーログを保存する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+各エラーには
+一意の
+<strong>エラーID</strong>
+を付与する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>49. エラーログ項目</h2>
+
+<div class="box">
+
+<p>
+サーバー側の詳細ログでは、
+原因調査に必要な情報を記録できる構造とする。
+</p>
+
+</div>
+
+<pre>
+概念例：
+
+error_id
+error_code
+timestamp
+
+game_mode
+game_id
+room_id
+
+answer_card_id
+guessed_card_id
+
+invalid_field
+invalid_value
+
+data_version_id
+version_code
+
+request_id
+
+stack_trace
+</pre>
+
+<div class="warning">
+
+<p>
+ログへCookie・Authorization・CSRF Token等の
+不要な認証・セッション秘密情報を保存しない。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+実際に保存する項目は
+エラー種別に応じて必要なものを記録する。
+</p>
+
+<p>
+ログの具体的なテーブル構造は
+04・06・07の設計へ従う。
+</p>
+
+</div>
+
+<hr>
+
+<h2>50. エラーID</h2>
+
+<div class="box">
+
+<p>
+ユーザーからの問い合わせ内容と
+サーバーログを対応付けるため、
+エラー発生ごとに一意のエラーIDを発行する。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+SG-20260728-A8F3K2
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+同一エラーIDから
+運営側が対応する詳細ログを検索できるようにする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>51. エラーコード</h2>
+
+<div class="box">
+
+<p>
+原因の大分類を識別するため、
+エラーコードを持たせる。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>エラーコード例</th>
+<th>意味</th>
+</tr>
+
+<tr>
+<td>CARD_DATA_INVALID</td>
+<td>カードデータの値が不正</td>
+</tr>
+
+<tr>
+<td>CARD_DATA_MISSING</td>
+<td>必要なカードデータが欠損</td>
+</tr>
+
+<tr>
+<td>CARD_REFERENCE_ERROR</td>
+<td>クラス・カードセット等の参照先が不正</td>
+</tr>
+
+<tr>
+<td>JUDGEMENT_ERROR</td>
+<td>カード判定処理中の異常</td>
+</tr>
+
+<tr>
+<td>GAME_STATE_ERROR</td>
+<td>ゲーム状態の不整合</td>
+</tr>
+
+<tr>
+<td>DATABASE_ERROR</td>
+<td>必要データの取得失敗等</td>
+</tr>
+
+</table>
+
+<div class="notice">
+
+<p>
+エラーコードは実装上必要になった場合に追加可能とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>52. ユーザー向けエラー画面</h2>
+
+<div class="box">
+
+<p>
+データ不具合によってゲームを正常に継続できない場合は、
+安全な情報のみを使用したエラー画面を表示する。
+</p>
+
+</div>
+
+<pre>
+データ不具合が発生しました。
+お手数ですが、以下の情報を添えて
+[お問い合わせ]に連絡してください。
+
+
+エラーID：
+SG-20260728-A8F3K2
+
+エラーコード：
+CARD_DATA_INVALID
+
+対象項目：
+atk
+
+データバージョン：
+2026-07-28-01
+
+発生日時：
+2026/07/28 15:42:18
+</pre>
+
+<div class="notice">
+
+<p>
+ユーザー画面の
+「データバージョン」には
+内部主キー
+<code>data_version_id</code>
+ではなく、
+人間が確認できる
+<code>version_code</code>
+を表示する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>53. ユーザーへ表示する情報</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>表示</th>
+</tr>
+
+<tr>
+<td>エラーID</td>
+<td>表示</td>
+</tr>
+
+<tr>
+<td>エラーコード</td>
+<td>表示</td>
+</tr>
+
+<tr>
+<td>安全な対象項目名</td>
+<td>必要な場合のみ表示</td>
+</tr>
+
+<tr>
+<td>version_code</td>
+<td>表示</td>
+</tr>
+
+<tr>
+<td>発生日時</td>
+<td>表示</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>54. ユーザーへ表示しない情報</h2>
+
+<div class="warning">
+
+<p>
+以下の情報は
+ユーザー向けエラー画面へ表示しない。
+</p>
+
+<ul>
+<li>正解card_id。</li>
+<li>正解カードの未公開情報。</li>
+<li>内部data_version_id。</li>
+<li>sessionToken。</li>
+<li>reconnectToken。</li>
+<li>Cookie。</li>
+<li>Authorization。</li>
+<li>CSRF Token。</li>
+<li>認証情報。</li>
+<li>秘密鍵。</li>
+<li>環境変数。</li>
+<li>DB内部情報。</li>
+<li>サーバー内部パス。</li>
+<li>スタックトレース。</li>
+<li>その他セキュリティ上公開すべきでない情報。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>55. お問い合わせリンク</h2>
+
+<div class="box">
+
+<p>
+エラー画面内の
+<strong>「お問い合わせ」</strong>
+は、
+サイトのお問い合わせページへのリンクとする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+お問い合わせページは
+<strong>新しいタブ</strong>
+で開く。
+</p>
+
+</div>
+
+<pre>
+&lt;a
+    href="contactUrl"
+    target="_blank"
+    rel="noopener noreferrer"
+&gt;
+    お問い合わせ
+&lt;/a&gt;
+</pre>
+
+<hr>
+
+<h2>56. お問い合わせURLの管理</h2>
+
+<div class="box">
+
+<p>
+お問い合わせページURLは、
+ゲームコードの複数箇所へ直接書き込まず
+設定値として管理する。
+</p>
+
+</div>
+
+<pre>
+SG_CONFIG.contactUrl
+</pre>
+
+<div class="rule">
+
+<p>
+独立サイトからWordPress等へ移設して
+お問い合わせページURLが変更された場合も、
+設定変更だけで対応可能な構造とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>57. 判定エラーと通常の不一致</h2>
+
+<div class="box">
+
+<p>
+ゲーム上の「不一致」と
+システム上の「判定不能エラー」は
+明確に分離する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>状態</th>
+<th>処理</th>
+</tr>
+
+<tr>
+<td>クラスが違う</td>
+<td>正常な灰色判定</td>
+</tr>
+
+<tr>
+<td>コストが違う</td>
+<td>正常な▲ / ▼判定</td>
+</tr>
+
+<tr>
+<td>タイプが違う</td>
+<td>正常な灰色判定</td>
+</tr>
+
+<tr>
+<td>必要データが壊れている</td>
+<td>エラー</td>
+</tr>
+
+<tr>
+<td>存在しない参照ID</td>
+<td>エラー</td>
+</tr>
+
+<tr>
+<td>Followerのatk / life欠損</td>
+<td>エラー</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>58. 偽の既定値を使用しない</h2>
+
+<div class="warning">
+
+<p>
+データが取得できない場合に
+以下のような処理を行わない。
+</p>
+
+<pre>
+atkがない
+→ 0として判定
+
+lifeがない
+→ 0として判定
+
+classがない
+→ Neutralとして判定
+
+tribesがない理由が不明
+→ 空集合として判定
+
+card_set不明
+→ トークン扱い
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+正常な「値なし」であることが
+データモデル上確定している場合のみ、
+NULL・空集合等を正常値として扱う。
+</p>
+
+</div>
+
+<hr>
+
+<h2>59. データバージョン</h2>
+
+<div class="box">
+
+<p>
+どのカードデータを使用して判定したか追跡できるよう、
+ゲーム開始時に
+<code>data_version_id</code>
+を固定する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<pre>
+data_version_id
+
+→ D1内部で使用するVersion識別子
+
+
+version_code
+
+→ 人間向けVersion表記
+→ 例：2026-07-28-01
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+ゲーム開始時点の
+<code>data_version_id</code>
+をゲーム終了まで維持する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>60. カードデータ更新中のゲーム</h2>
+
+<div class="box">
+
+<p>
+進行中ゲームの途中で
+Current Versionが変更された場合も、
+途中から新しいデータへ切り替えない。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+ゲーム開始
+
+data_version_id = A
+
+↓
+
+CurrentがBへ変更
+
+↓
+
+進行中ゲーム
+→ Aを維持
+
+新規ゲーム
+→ Bを使用
+</pre>
+
+</div>
+
+<div class="notice">
+
+<p>
+Dailyについては、
+Current変更時に当日のDailyを停止する
+07の専用ルールが別途適用される。
+</p>
+
+<p>
+これはカード判定ロジックが途中でVersion Bへ切り替わることを意味しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>61. 判定処理順序</h2>
+
+<div class="box">
+
+<p>
+回答時の概念的な判定順序は以下とする。
+</p>
+
+</div>
+
+<pre>
+1.
+requestId確認
+
+
+2.
+ゲーム状態確認
+
+
+3.
+回答可能状態確認
+
+
+4.
+回答card_id確認
+
+
+5.
+回答対象範囲確認
+
+
+6.
+固定data_version_id確認
+
+
+7.
+回答カードNormalized Data取得
+
+
+8.
+正解カードNormalized Data取得
+
+
+9.
+必須データ検証
+
+
+10.
+card_idによるゲーム正解判定
+
+
+11.
+各カード項目比較
+
+
+12.
+判定結果生成
+
+
+13.
+回答履歴・回答回数更新
+
+
+14.
+ゲーム終了判定
+
+
+15.
+状態確定
+
+
+16.
+ブラウザへ正式結果返却
+</pre>
+
+<div class="notice">
+
+<p>
+サーバー内部の厳密な原子性・requestId処理・
+トランザクション順序については
+06 サーバー・Cloudflare設計を正とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>62. 回答対象範囲の検証</h2>
+
+<div class="box">
+
+<p>
+サジェストUIで対象外カードを表示しないだけでなく、
+サーバー側でも回答カードが
+現在のゲーム対象範囲内か確認する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+対象外card_idが直接送信された場合、
+正常な回答として受理しない。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+クライアント側の対象範囲判定はUI補助であり、
+正式な回答可否判定ではない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>63. 色そのものと判定ロジック</h2>
+
+<div class="box">
+
+<p>
+サーバーは
+「緑色そのもの」を返すのではなく、
+意味上の判定状態を返す。
+</p>
+
+</div>
+
+<pre>
+サーバー：
+
+match
+partial
+miss
+higher
+lower
+notApplicable
+
+
+↓
+
+ブラウザ：
+
+
+match
+→ 緑
+
+partial
+→ 黄色
+
+miss
+→ 灰色
+
+higher
+→ ▲
+
+lower
+→ ▼
+
+notApplicable
+→ －
+</pre>
+
+<div class="rule">
+
+<p>
+これにより、
+将来デザイン上の色を変更しても
+判定ロジックそのものを変更する必要がない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>64. 判定一覧</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>完全一致</th>
+<th>部分一致</th>
+<th>不一致 / 数値</th>
+</tr>
+
+<tr>
+<td>カードパック</td>
+<td>緑</td>
+<td>なし</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>クラス</td>
+<td>緑</td>
+<td>なし</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>レアリティ</td>
+<td>緑</td>
+<td>なし</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>分類</td>
+<td>緑</td>
+<td>なし</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>タイプ</td>
+<td>緑</td>
+<td>黄色</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>コスト</td>
+<td>緑</td>
+<td>なし</td>
+<td>▲ / ▼</td>
+</tr>
+
+<tr>
+<td>攻撃力</td>
+<td>緑</td>
+<td>なし</td>
+<td>▲ / ▼ / －</td>
+</tr>
+
+<tr>
+<td>体力</td>
+<td>緑</td>
+<td>なし</td>
+<td>▲ / ▼ / －</td>
+</tr>
+
+<tr>
+<td>キーワード能力</td>
+<td>緑</td>
+<td>黄色</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>能力・効果テキスト</td>
+<td colspan="3">判定しない</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>65. タイプ判定一覧</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>回答</th>
+<th>正解</th>
+<th>結果</th>
+</tr>
+
+<tr>
+<td>宴楽</td>
+<td>宴楽</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>宴楽・兵士</td>
+<td>兵士・宴楽</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>宴楽・兵士</td>
+<td>宴楽・学園</td>
+<td>黄色</td>
+</tr>
+
+<tr>
+<td>兵士</td>
+<td>学園</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>－</td>
+<td>－</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>－</td>
+<td>宴楽</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>宴楽</td>
+<td>－</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>全て</td>
+<td>全て</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>全て</td>
+<td>宴楽</td>
+<td>黄色</td>
+</tr>
+
+<tr>
+<td>宴楽</td>
+<td>全て</td>
+<td>黄色</td>
+</tr>
+
+<tr>
+<td>全て</td>
+<td>宴楽・兵士</td>
+<td>黄色</td>
+</tr>
+
+<tr>
+<td>宴楽・兵士</td>
+<td>全て</td>
+<td>黄色</td>
+</tr>
+
+<tr>
+<td>全て</td>
+<td>－</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>－</td>
+<td>全て</td>
+<td>灰色</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>66. 数値判定一覧</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>回答値</th>
+<th>正解値</th>
+<th>結果</th>
+<th>意味</th>
+</tr>
+
+<tr>
+<td>3</td>
+<td>5</td>
+<td>▲</td>
+<td>正解はもっと大きい</td>
+</tr>
+
+<tr>
+<td>5</td>
+<td>5</td>
+<td>緑</td>
+<td>一致</td>
+</tr>
+
+<tr>
+<td>7</td>
+<td>5</td>
+<td>▼</td>
+<td>正解はもっと小さい</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>67. 確定事項</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>確定仕様</th>
+</tr>
+
+<tr>
+<td>正式判定</td>
+<td>サーバー側</td>
+</tr>
+
+<tr>
+<td>ゲーム正解判定</td>
+<td>guessedCardId === answerCardId のみ</td>
+</tr>
+
+<tr>
+<td>カード識別</td>
+<td>card_id</td>
+</tr>
+
+<tr>
+<td>項目一致とゲーム正解</td>
+<td>別処理</td>
+</tr>
+
+<tr>
+<td>緑</td>
+<td>完全一致</td>
+</tr>
+
+<tr>
+<td>黄色</td>
+<td>部分一致</td>
+</tr>
+
+<tr>
+<td>灰色</td>
+<td>不一致</td>
+</tr>
+
+<tr>
+<td>黄色対象</td>
+<td>タイプ・キーワード能力のみ</td>
+</tr>
+
+<tr>
+<td>単一値項目</td>
+<td>一致なら緑、不一致なら灰色</td>
+</tr>
+
+<tr>
+<td>カードパックToken</td>
+<td>is_token=trueなら「トークン」Identity</td>
+</tr>
+
+<tr>
+<td>カードパックBasic</td>
+<td>非Tokenかつcard_set_id=10000なら「ベーシック」Identity</td>
+</tr>
+
+<tr>
+<td>通常カードパック</td>
+<td>card_set_id単位で比較</td>
+</tr>
+
+<tr>
+<td>分類</td>
+<td>Normalized Dataのtype</td>
+</tr>
+
+<tr>
+<td>タイプ</td>
+<td>tribes / card_tribes / tribe_mode</td>
+</tr>
+
+<tr>
+<td>▲</td>
+<td>正解値の方が大きい</td>
+</tr>
+
+<tr>
+<td>▼</td>
+<td>正解値の方が小さい</td>
+</tr>
+
+<tr>
+<td>数値一致</td>
+<td>緑・矢印なし</td>
+</tr>
+
+<tr>
+<td>コスト</td>
+<td>costを数値比較</td>
+</tr>
+
+<tr>
+<td>攻撃力</td>
+<td>atk</td>
+</tr>
+
+<tr>
+<td>体力</td>
+<td>life</td>
+</tr>
+
+<tr>
+<td>atk / life比較</td>
+<td>双方Followerの場合のみ</td>
+</tr>
+
+<tr>
+<td>非Followerのatk / life</td>
+<td>Normalized DataではNULL</td>
+</tr>
+
+<tr>
+<td>非Followerを含むatk / life判定</td>
+<td>notApplicable / －</td>
+</tr>
+
+<tr>
+<td>タイプ</td>
+<td>集合比較</td>
+</tr>
+
+<tr>
+<td>タイプ完全一致</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>タイプ一部一致</td>
+<td>黄色</td>
+</tr>
+
+<tr>
+<td>タイプ共通なし</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>タイプなし同士</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>「全て」内部表現</td>
+<td>tribe_mode=all</td>
+</tr>
+
+<tr>
+<td>「全て」同士</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>「全て」対通常タイプ</td>
+<td>黄色</td>
+</tr>
+
+<tr>
+<td>「全て」対タイプなし</td>
+<td>灰色</td>
+</tr>
+
+<tr>
+<td>キーワード能力</td>
+<td>集合比較</td>
+</tr>
+
+<tr>
+<td>キーワードなし同士</td>
+<td>緑</td>
+</tr>
+
+<tr>
+<td>能力・効果テキスト</td>
+<td>表示のみ・判定しない</td>
+</tr>
+
+<tr>
+<td>全ゲームモード</td>
+<td>同一判定ロジック</td>
+</tr>
+
+<tr>
+<td>時間切れランダムGuess</td>
+<td>通常Guessと同じ判定</td>
+</tr>
+
+<tr>
+<td>異常値補完</td>
+<td>禁止</td>
+</tr>
+
+<tr>
+<td>データ異常</td>
+<td>判定中止・ゲームerror</td>
+</tr>
+
+<tr>
+<td>異常回答</td>
+<td>正常Guessとして確定しない</td>
+</tr>
+
+<tr>
+<td>エラーログ</td>
+<td>サーバー側へ保存</td>
+</tr>
+
+<tr>
+<td>エラーID</td>
+<td>一意のIDを発行</td>
+</tr>
+
+<tr>
+<td>ユーザー表示</td>
+<td>安全なエラー情報のみ</td>
+</tr>
+
+<tr>
+<td>正解card_id</td>
+<td>エラー画面へ表示しない</td>
+</tr>
+
+<tr>
+<td>内部Version</td>
+<td>data_version_id</td>
+</tr>
+
+<tr>
+<td>人間向けVersion</td>
+<td>version_code</td>
+</tr>
+
+<tr>
+<td>判定Version</td>
+<td>ゲーム開始時のdata_version_idを終了まで固定</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>68. 03で詳細定義しない内容</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>内容</th>
+<th>設計書</th>
+</tr>
+
+<tr>
+<td>カードデータの具体的なテーブル構造</td>
+<td>04 データ設計</td>
+</tr>
+
+<tr>
+<td>tribe_mode / card_tribes等の保存形式</td>
+<td>04 データ設計</td>
+</tr>
+
+<tr>
+<td>Normalized Data生成方式</td>
+<td>08 データ更新手順</td>
+</tr>
+
+<tr>
+<td>Source type等からのMapping</td>
+<td>08 データ更新手順</td>
+</tr>
+
+<tr>
+<td>判定色・レイアウトの具体的なCSS</td>
+<td>05 画面・UI設計</td>
+</tr>
+
+<tr>
+<td>エラー画面の具体的なデザイン</td>
+<td>05 画面・UI設計</td>
+</tr>
+
+<tr>
+<td>判定APIの具体的な通信形式</td>
+<td>06 サーバー・Cloudflare設計</td>
+</tr>
+
+<tr>
+<td>requestId処理</td>
+<td>06 サーバー・Cloudflare設計</td>
+</tr>
+
+<tr>
+<td>回答処理の原子性</td>
+<td>06 サーバー・Cloudflare設計</td>
+</tr>
+
+<tr>
+<td>エラーログ管理UI</td>
+<td>07 管理画面設計</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>69. 本設計書の位置付け</h2>
+
+<div class="box">
+
+<p>
+本書「03 判定仕様」は、
+Shado Guesserにおいて
+回答カードと正解カードをどのように比較し、
+どの判定状態を生成するかを定義する。
+</p>
+
+<p>
+データの内部表現は04、
+画面上での見せ方は05、
+サーバー処理は06、
+データ生成・正規化は08へ分離して管理する。
+</p>
+
+</div>
+
+<hr>
+
+<p class="small">
+Shado Guesser 基本設計書<br>
+03 判定仕様<br><br>
+©Shado Guesser
+</p>
+
+</body>
+</html>

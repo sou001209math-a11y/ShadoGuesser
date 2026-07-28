@@ -1,0 +1,4323 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Shado Guesser 基本設計書 - 04 データ設計</title>
+
+<style>
+
+body{
+    font-family:"Yu Gothic","Meiryo",sans-serif;
+    background:#f5f5f5;
+    color:#222;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.8;
+}
+
+h1{
+    border-bottom:4px solid #3f51b5;
+    padding-bottom:10px;
+}
+
+h2{
+    margin-top:45px;
+    border-left:8px solid #3f51b5;
+    padding-left:12px;
+}
+
+h3{
+    margin-top:30px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th,
+td{
+    border:1px solid #cccccc;
+    padding:10px;
+    vertical-align:top;
+}
+
+th{
+    background:#3f51b5;
+    color:white;
+}
+
+.box{
+    background:white;
+    border-radius:10px;
+    padding:20px;
+    margin-top:20px;
+}
+
+.notice{
+    background:#fff8e1;
+    border-left:6px solid #ffc107;
+    padding:15px;
+    margin-top:20px;
+}
+
+.rule{
+    background:#e8eaf6;
+    border-left:6px solid #3f51b5;
+    padding:15px;
+    margin-top:20px;
+}
+
+.warning{
+    background:#ffebee;
+    border-left:6px solid #d32f2f;
+    padding:15px;
+    margin-top:20px;
+}
+
+.example{
+    background:#e8f5e9;
+    border-left:6px solid #4caf50;
+    padding:15px;
+    margin-top:20px;
+}
+
+pre{
+    background:#222;
+    color:#f5f5f5;
+    padding:20px;
+    border-radius:8px;
+    overflow:auto;
+    line-height:1.6;
+}
+
+code{
+    background:#eeeeee;
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.small{
+    color:#777;
+    font-size:0.9em;
+}
+
+@media(max-width:700px){
+
+    body{
+        padding:18px;
+    }
+
+    table{
+        font-size:0.88em;
+    }
+
+    th,
+    td{
+        padding:7px;
+    }
+
+    pre{
+        padding:12px;
+        font-size:0.82em;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Shado Guesser 基本設計書</h1>
+
+<p>
+<strong>04：データ設計</strong>
+</p>
+
+<p>
+本設計書では、
+Shado Guesserで使用するカードマスターデータ、
+各種マスター、
+カードデータVersion、
+検索用静的データ、
+Dailyデータ、
+運営設定、
+監査ログ、
+エラーログ等の
+永続データ構造を定義する。
+</p>
+
+<p>
+進行中ゲームの状態管理、
+Durable Objects、
+WebSocket、
+再接続、
+deadline等については
+「06 サーバー・Cloudflare設計」で定義する。
+</p>
+
+<p>
+カードデータの取得・Importer・Mapping・Validation・
+Diff Report・Publish手順については
+「08 データ更新手順」で定義する。
+</p>
+
+<hr>
+
+<h2>1. データストア</h2>
+
+<div class="box">
+
+<p>
+Shado Guesserの主要な永続データストアには
+<strong>Cloudflare D1</strong>
+を使用する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<strong>D1で管理する主なデータ</strong>
+
+<ul>
+<li>カードデータVersion。</li>
+<li>カードマスター。</li>
+<li>カードセットマスター。</li>
+<li>クラスマスター。</li>
+<li>分類マスター。</li>
+<li>レアリティマスター。</li>
+<li>タイプマスター。</li>
+<li>カードとタイプの関連。</li>
+<li>キーワード能力マスター。</li>
+<li>カードとキーワード能力の関連。</li>
+<li>Daily問題データ。</li>
+<li>Daily提供状態。</li>
+<li>運営設定。</li>
+<li>エラーログ。</li>
+<li>管理操作監査ログ。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>2. D1へ保存しないデータ</h2>
+
+<div class="box">
+
+<p>
+すべてのゲームデータをD1へ保存するわけではない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+進行中ゲームの一時状態は
+Durable Objectsを使用する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>データ</th>
+<th>担当</th>
+</tr>
+
+<tr>
+<td>カードマスター</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>Data Version</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>Daily共通データ</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>運営設定</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>監査ログ</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>エラーログ</td>
+<td>D1</td>
+</tr>
+
+<tr>
+<td>Solo進行状態</td>
+<td>GameSessionDO</td>
+</tr>
+
+<tr>
+<td>Daily個人進行状態</td>
+<td>GameSessionDO</td>
+</tr>
+
+<tr>
+<td>2人出題進行状態</td>
+<td>ChallengeGameDO</td>
+</tr>
+
+<tr>
+<td>2人対戦進行状態</td>
+<td>BattleRoomDO</td>
+</tr>
+
+</table>
+
+<hr>
+
+<h2>3. 基本方針</h2>
+
+<div class="box">
+
+<ul>
+<li>公式カード情報と同じ意味の項目名は可能な限り維持する。</li>
+<li>Source DataとNormalized Dataを分離する。</li>
+<li>カードの正式識別にはカード名ではなく <code>card_id</code> を使用する。</li>
+<li>表示名称と内部IDを分離する。</li>
+<li>ゲーム判定に必要な情報を構造化する。</li>
+<li>能力テキストは全文をTEXTとして保持する。</li>
+<li>カード画像BinaryをD1へ保存しない。</li>
+<li>Data Versionごとの完全Snapshotを基本とする。</li>
+<li>Published Versionを書き換えない。</li>
+<li>進行中ゲームは開始時のdata_version_idを使用し続ける。</li>
+<li>未知値を推測して正常データへ変換しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>4. Source DataとNormalized Data</h2>
+
+<div class="box">
+
+<p>
+公式サイト由来のSource Dataと、
+Shado Guesserがゲームで使用するNormalized Dataは
+別のデータとして扱う。
+</p>
+
+</div>
+
+<pre>
+Official Structured Source Data
+
+↓
+
+Importer
+
+↓
+
+Mapping / Normalization
+
+↓
+
+Normalized Data
+
+↓
+
+D1
+
+↓
+
+Shado Guesser
+</pre>
+
+<div class="warning">
+
+<p>
+ゲーム本体が公式Source JSONの
+生の値・構造を直接解釈しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>5. SourceのtypeとNormalized type</h2>
+
+<div class="box">
+
+<p>
+特に
+<code>type</code>
+については、
+公式Source上の数値をそのまま
+Shado Guesserの分類IDとして使用できるとは限らない。
+</p>
+
+</div>
+
+<pre>
+Source
+
+source type
+
+↓
+
+Importerによる
+検証済みMapping
+
+↓
+
+Normalized Data
+
+type = 1 / 2 / 3
+</pre>
+
+<div class="rule">
+
+<p>
+D1の
+<code>cards.type</code>
+は
+Normalized Dataのみを保存する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>6. 公式名称を維持する項目</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>画面上の意味</th>
+<th>内部変数</th>
+<th>備考</th>
+</tr>
+
+<tr>
+<td>カードID</td>
+<td><code>card_id</code></td>
+<td>正式カード識別子</td>
+</tr>
+
+<tr>
+<td>カード名</td>
+<td><code>name</code></td>
+<td>表示・検索</td>
+</tr>
+
+<tr>
+<td>攻撃力</td>
+<td><code>atk</code></td>
+<td>進化前</td>
+</tr>
+
+<tr>
+<td>体力</td>
+<td><code>life</code></td>
+<td>進化前</td>
+</tr>
+
+<tr>
+<td>コスト</td>
+<td><code>cost</code></td>
+<td>整数</td>
+</tr>
+
+<tr>
+<td>分類</td>
+<td><code>type</code></td>
+<td>Normalized Dataでは1 / 2 / 3</td>
+</tr>
+
+<tr>
+<td>クラス</td>
+<td><code>class</code></td>
+<td>クラスID</td>
+</tr>
+
+<tr>
+<td>カードセット</td>
+<td><code>card_set_id</code></td>
+<td>Source由来のカードセットID</td>
+</tr>
+
+<tr>
+<td>スターターセット</td>
+<td><code>starter_set_id</code></td>
+<td>starter_card側のcard_set_idを分離</td>
+</tr>
+
+<tr>
+<td>レアリティ</td>
+<td><code>rarity</code></td>
+<td>レアリティID</td>
+</tr>
+
+<tr>
+<td>タイプ</td>
+<td><code>tribes</code></td>
+<td>UI上の「タイプ」</td>
+</tr>
+
+<tr>
+<td>能力テキスト</td>
+<td><code>skill_text</code></td>
+<td>全文</td>
+</tr>
+
+<tr>
+<td>フレーバーテキスト</td>
+<td><code>flavour_text</code></td>
+<td>取得可能な場合</td>
+</tr>
+
+<tr>
+<td>トークン</td>
+<td><code>is_token</code></td>
+<td>Token判定の正式情報</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>7. 使用しない独自名称</h2>
+
+<div class="warning">
+
+<pre>
+attack
+→ 使用しない
+→ atk
+
+
+health
+→ 使用しない
+→ life
+
+
+class_id
+→ cardsでは使用しない
+→ class
+
+
+pack_id
+→ 使用しない
+→ card_set_id
+
+
+rarity_id
+→ cardsでは使用しない
+→ rarity
+
+
+classification_id
+→ 使用しない
+→ type
+</pre>
+
+</div>
+
+<hr>
+
+<h2>8. Shado Guesser独自追加項目</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>用途</th>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>内部Data Version識別</td>
+</tr>
+
+<tr>
+<td><code>version_code</code></td>
+<td>人間向けVersion表記</td>
+</tr>
+
+<tr>
+<td><code>image_ref</code></td>
+<td>カード画像取得用情報</td>
+</tr>
+
+<tr>
+<td><code>enabled</code></td>
+<td>ゲーム利用可否</td>
+</tr>
+
+<tr>
+<td><code>tribe_mode</code></td>
+<td>通常タイプ / 特殊状態「全て」</td>
+</tr>
+
+<tr>
+<td><code>release_order</code></td>
+<td>通常カードパックの発売順</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>9. data_version_idとversion_code</h2>
+
+<div class="rule">
+
+<pre>
+data_version_id
+
+→ D1内部のVersion主キー
+→ Worker / Durable Objects内部で使用
+
+
+version_code
+
+→ 人間向けVersion
+→ 例：2026-07-28-01
+→ Search Indexファイル名
+→ 管理画面
+→ エラー画面
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+両者を
+<code>dataVersion</code>
+という曖昧な1名称で扱わない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>10. data_versions</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>内部Version ID</td>
+</tr>
+
+<tr>
+<td><code>version_code</code></td>
+<td>JST基準 YYYY-MM-DD-連番</td>
+</tr>
+
+<tr>
+<td><code>status</code></td>
+<td>draft / published</td>
+</tr>
+
+<tr>
+<td><code>is_current</code></td>
+<td>新規ゲーム用Currentか</td>
+</tr>
+
+<tr>
+<td><code>raw_data_hash</code></td>
+<td>Importer入力Source DataのHash</td>
+</tr>
+
+<tr>
+<td><code>importer_version</code></td>
+<td>生成に使用したImporter Version</td>
+</tr>
+
+<tr>
+<td><code>source_schema_version</code></td>
+<td>対応Source Schema Version</td>
+</tr>
+
+<tr>
+<td><code>created_at</code></td>
+<td>Draft作成日時</td>
+</tr>
+
+<tr>
+<td><code>published_at</code></td>
+<td>Published日時。DraftではNULL可</td>
+</tr>
+
+</table>
+
+</div>
+
+<div class="rule">
+
+<p>
+どのSource DataとImporterから
+そのVersionが生成されたか追跡可能にする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>11. version_code</h2>
+
+<div class="box">
+
+<p>
+Version Codeは
+JST基準で以下の形式とする。
+</p>
+
+</div>
+
+<pre>
+YYYY-MM-DD-serial
+</pre>
+
+<div class="example">
+
+<pre>
+2026-07-28-01
+
+2026-07-28-02
+
+2026-08-01-01
+</pre>
+
+</div>
+
+<hr>
+
+<h2>12. Current Version</h2>
+
+<div class="box">
+
+<p>
+新規ゲームが使用するPublished Versionを
+Current Versionとする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>CurrentにできるのはPublished Versionのみ。</li>
+<li>DraftをCurrentにしない。</li>
+<li>Currentは同時に1Versionのみ。</li>
+<li>Publishedしただけでは自動Current化しない。</li>
+<li>Current変更は07の管理画面から行う。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>13. cards</h2>
+
+<div class="box">
+
+<p>
+カードの中心となるNormalized Dataは
+<code>cards</code>
+テーブルへ保存する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>型イメージ</th>
+<th>NULL</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>INTEGER</td>
+<td>不可</td>
+<td>Version</td>
+</tr>
+
+<tr>
+<td><code>card_id</code></td>
+<td>TEXT</td>
+<td>不可</td>
+<td>カードID</td>
+</tr>
+
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>不可</td>
+<td>カード名</td>
+</tr>
+
+<tr>
+<td><code>is_token</code></td>
+<td>INTEGER</td>
+<td>不可</td>
+<td>0 / 1</td>
+</tr>
+
+<tr>
+<td><code>card_set_id</code></td>
+<td>INTEGER</td>
+<td>不可</td>
+<td>Source由来セットID</td>
+</tr>
+
+<tr>
+<td><code>starter_set_id</code></td>
+<td>INTEGER</td>
+<td>可</td>
+<td>starter_card側セットID</td>
+</tr>
+
+<tr>
+<td><code>class</code></td>
+<td>INTEGER</td>
+<td>不可</td>
+<td>クラスID</td>
+</tr>
+
+<tr>
+<td><code>type</code></td>
+<td>INTEGER</td>
+<td>不可</td>
+<td>Normalized分類ID</td>
+</tr>
+
+<tr>
+<td><code>cost</code></td>
+<td>INTEGER</td>
+<td>不可</td>
+<td>コスト</td>
+</tr>
+
+<tr>
+<td><code>atk</code></td>
+<td>INTEGER</td>
+<td>条件付き可</td>
+<td>進化前攻撃力</td>
+</tr>
+
+<tr>
+<td><code>life</code></td>
+<td>INTEGER</td>
+<td>条件付き可</td>
+<td>進化前体力</td>
+</tr>
+
+<tr>
+<td><code>rarity</code></td>
+<td>INTEGER</td>
+<td>不可</td>
+<td>レアリティID</td>
+</tr>
+
+<tr>
+<td><code>tribe_mode</code></td>
+<td>TEXT</td>
+<td>不可</td>
+<td>normal / all</td>
+</tr>
+
+<tr>
+<td><code>skill_text</code></td>
+<td>TEXT</td>
+<td>不可</td>
+<td>能力全文</td>
+</tr>
+
+<tr>
+<td><code>flavour_text</code></td>
+<td>TEXT</td>
+<td>可</td>
+<td>フレーバーテキスト</td>
+</tr>
+
+<tr>
+<td><code>image_ref</code></td>
+<td>TEXT</td>
+<td>原則不可</td>
+<td>画像参照</td>
+</tr>
+
+<tr>
+<td><code>enabled</code></td>
+<td>INTEGER</td>
+<td>不可</td>
+<td>ゲーム利用可否</td>
+</tr>
+
+</table>
+
+<div class="rule">
+
+<p>
+cardsの主キーは
+</p>
+
+<pre>
+(data_version_id, card_id)
+</pre>
+
+<p>
+の複合キーとする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>14. card_id</h2>
+
+<div class="rule">
+
+<ul>
+<li>カード名を主キーにしない。</li>
+<li>同名でもcard_idが異なれば別カード。</li>
+<li>Guessの正解判定はcard_id同士で行う。</li>
+<li>アプリ内部では文字列として扱う。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>15. class</h2>
+
+<div class="box">
+
+<p>
+Normalized Dataの
+<code>class</code>
+は以下を基本とする。
+</p>
+
+</div>
+
+<pre>
+CLASS = {
+    0: "ニュートラル",
+    1: "エルフ",
+    2: "ロイヤル",
+    3: "ウィッチ",
+    4: "ドラゴン",
+    5: "ナイトメア",
+    6: "ビショップ",
+    7: "ネメシス"
+}
+</pre>
+
+<div class="warning">
+
+<p>
+将来未知class IDがSourceに出現した場合は
+勝手に名称を作らずImport Errorとする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>16. classes</h2>
+
+<div class="box">
+
+<p>
+クラス名称・表示順は
+<code>classes</code>
+マスターで管理する。
+</p>
+
+</div>
+
+<pre>
+data_version_id
+class_id
+name
+sort_order
+</pre>
+
+<hr>
+
+<h2>17. 分類 type</h2>
+
+<div class="box">
+
+<p>
+画面上の「分類」は
+Normalized Dataの
+<code>type</code>
+を使用する。
+</p>
+
+</div>
+
+<pre>
+TYPE = {
+    1: "フォロワー",
+    2: "スペル",
+    3: "アミュレット"
+}
+</pre>
+
+<div class="rule">
+
+<p>
+cards.typeの正常値は
+<strong>1 / 2 / 3</strong>
+のみとする。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+Source Dataでtype=4等が存在しても、
+それをShado Guesserのtype=4として保存しない。
+</p>
+
+<p>
+Source側の意味を確認した
+明示的MappingをImporterで適用する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>18. types</h2>
+
+<div class="box">
+
+<p>
+Normalized分類名称・表示順は
+<code>types</code>
+マスターで管理する。
+</p>
+
+</div>
+
+<pre>
+data_version_id
+type_id
+name
+sort_order
+</pre>
+
+<hr>
+
+<h2>19. rarity</h2>
+
+<div class="box">
+
+<p>
+カードのレアリティは
+Normalized Dataの
+<code>rarity</code>
+で保持する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+rarity IDの意味を数値から推測しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>20. rarities</h2>
+
+<div class="box">
+
+<p>
+レアリティ名称は
+<code>rarities</code>
+マスターで管理する。
+</p>
+
+</div>
+
+<pre>
+data_version_id
+rarity_id
+name
+sort_order
+</pre>
+
+<hr>
+
+<h2>21. トークン判定</h2>
+
+<div class="rule">
+
+<pre>
+is_token = true
+→ Token
+
+is_token = false
+→ Non Token
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+以下からTokenを推測しない。
+</p>
+
+<ul>
+<li>card_set_id。</li>
+<li>starter_set_id。</li>
+<li>type。</li>
+<li>card_idの桁。</li>
+<li>カード名。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>22. ベーシック</h2>
+
+<div class="rule">
+
+<pre>
+is_token == false
+AND
+card_set_id == 10000
+
+↓
+
+Basic
+</pre>
+
+</div>
+
+<p>
+cardsへ
+<code>is_basic</code>
+は保存しない。
+</p>
+
+<hr>
+
+<h2>23. set_category</h2>
+
+<div class="box">
+
+<p>
+画面・内部処理で必要な場合は
+以下の論理値を算出する。
+</p>
+
+</div>
+
+<pre>
+if (is_token === true) {
+
+    set_category = "token";
+
+}
+else if (card_set_id === 10000) {
+
+    set_category = "basic";
+
+}
+else {
+
+    set_category = "pack";
+
+}
+</pre>
+
+<div class="rule">
+
+<p>
+<code>set_category</code>
+はcardsへ重複保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>24. card_sets</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>Version</td>
+</tr>
+
+<tr>
+<td><code>card_set_id</code></td>
+<td>カードセットID</td>
+</tr>
+
+<tr>
+<td><code>name</code></td>
+<td>確認済み正式名称</td>
+</tr>
+
+<tr>
+<td><code>release_order</code></td>
+<td>通常カードパックの発売順</td>
+</tr>
+
+<tr>
+<td><code>sort_order</code></td>
+<td>UI表示順</td>
+</tr>
+
+</table>
+
+</div>
+
+<div class="warning">
+
+<p>
+card_set_idの値そのものから
+パック名・発売順を推測しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>25. card_set_idの例示</h2>
+
+<div class="warning">
+
+<p>
+設計書内で
+実在データと誤認しやすい
+「10008 = 特定パック」
+のような未検証Mapping例を固定しない。
+</p>
+
+</div>
+
+<div class="example">
+
+<pre>
+説明用例：
+
+card_set_id = &lt;PACK_ID_A&gt;
+name        = &lt;正式確認済みパック名A&gt;
+release_order = 1
+
+card_set_id = &lt;PACK_ID_B&gt;
+name        = &lt;正式確認済みパック名B&gt;
+release_order = 2
+</pre>
+
+</div>
+
+<hr>
+
+<h2>26. release_order</h2>
+
+<div class="rule">
+
+<ul>
+<li>通常カードパックの正式な発売順から決定する。</li>
+<li>古いパックほど小さい値。</li>
+<li>新しいパックほど大きい値。</li>
+<li>card_set_idをrelease_orderの代わりにしない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>27. Basicとrelease_order</h2>
+
+<div class="box">
+
+<pre>
+Basic
+
+card_set_id = 10000
+release_order = NULL
+</pre>
+
+</div>
+
+<p>
+Basicは「最新6パック」の6個に含めない。
+</p>
+
+<hr>
+
+<h2>28. ローテーション範囲</h2>
+
+<div class="rule">
+
+<pre>
+Basic
++
+release_orderが大きい通常カードパック6個
+
+↓
+
+is_token = false
+</pre>
+
+</div>
+
+<pre>
+rotation_pack_count = 6
+</pre>
+
+<hr>
+
+<h2>29. CustomとToken</h2>
+
+<div class="box">
+
+<p>
+Customでは通常カードとTokenで
+カードパック条件の扱いが異なる。
+</p>
+
+</div>
+
+<div class="rule">
+
+<h3>通常カード</h3>
+
+<pre>
+is_token = false
+
+AND
+
+class条件
+
+AND
+
+card_set_id条件
+
+AND
+
+rarity条件
+
+AND
+
+type条件
+</pre>
+
+<h3>Token</h3>
+
+<pre>
+is_token = true
+
+AND
+
+include_tokens = true
+
+AND
+
+class条件
+
+AND
+
+rarity条件
+
+AND
+
+type条件
+
+
+card_set_id条件
+→ 適用しない
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+Tokenを通常カードパックへ所属させるための
+独自Mappingを作らない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+最終対象集合は
+<code>card_id</code>
+単位で重複除外する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>30. starter_set_id</h2>
+
+<div class="box">
+
+<p>
+Source Dataの
+<code>starter_card.card_set_id</code>
+は、
+通常の
+<code>card_set_id</code>
+と分離する。
+</p>
+
+</div>
+
+<pre>
+common.card_set_id
+
+→ card_set_id
+
+
+starter_card.card_set_id
+
+→ starter_set_id
+</pre>
+
+<div class="warning">
+
+<p>
+starter_set_idを以下へ使用しない。
+</p>
+
+<ul>
+<li>Token判定。</li>
+<li>Basic判定。</li>
+<li>通常Pack判定。</li>
+<li>Rotation判定。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>31. starter_set_idの意味を推測しない</h2>
+
+<div class="rule">
+
+<p>
+特定のstarter_set_idについて
+「この値だからToken」等の固定推測ルールを作らない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>32. タイプ tribes</h2>
+
+<div class="box">
+
+<p>
+UI上の「タイプ」は
+Sourceの
+<code>tribes</code>
+をImporterで正規化した情報を使用する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+UI上の「分類」と「タイプ」を混同しない。
+</p>
+
+<pre>
+分類
+→ cards.type
+→ フォロワー / スペル / アミュレット
+
+
+タイプ
+→ tribes / card_tribes
+→ 宴楽 / 兵士 / 学園 等
+</pre>
+
+</div>
+
+<hr>
+
+<h2>33. tribes</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>Version</td>
+</tr>
+
+<tr>
+<td><code>tribe_id</code></td>
+<td>確認済みタイプID</td>
+</tr>
+
+<tr>
+<td><code>name</code></td>
+<td>表示名称</td>
+</tr>
+
+<tr>
+<td><code>sort_order</code></td>
+<td>表示順</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>34. card_tribes</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>Version</td>
+</tr>
+
+<tr>
+<td><code>card_id</code></td>
+<td>カードID</td>
+</tr>
+
+<tr>
+<td><code>tribe_id</code></td>
+<td>タイプID</td>
+</tr>
+
+</table>
+
+</div>
+
+<div class="rule">
+
+<p>
+複数タイプを持つカードは
+card_tribesへ複数行登録する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>35. タイプなし</h2>
+
+<div class="rule">
+
+<pre>
+tribe_mode = "normal"
+
+card_tribes = 0件
+
+↓
+
+画面表示
+
+－
+</pre>
+
+</div>
+
+<p>
+「なし」というダミーtribeを作成しない。
+</p>
+
+<hr>
+
+<h2>36. 特殊タイプ「全て」</h2>
+
+<div class="rule">
+
+<pre>
+通常
+
+tribe_mode = "normal"
+
+
+全て
+
+tribe_mode = "all"
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+「全て」を
+既存tribe IDすべてへ展開しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>37. tribe_mode=allの利点</h2>
+
+<div class="box">
+
+<p>
+将来新しいタイプが追加されても、
+過去の「全て」カードへ
+新しいcard_tribes行を追加する必要がない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>38. Keyword</h2>
+
+<div class="box">
+
+<p>
+キーワード能力は
+skill_textとは別に構造化する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+公式Sourceに構造化Keyword情報が存在する場合は
+それを優先する。
+</p>
+
+</div>
+
+<p>
+構造化情報が存在しない場合のみ、
+08で定義したImporterが
+公式Markupから抽出する。
+</p>
+
+<hr>
+
+<h2>39. Keyword抽出</h2>
+
+<div class="example">
+
+<pre>
+&lt;color=Keyword&gt;守護&lt;/color&gt;
+
+↓
+
+守護
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+能力文をAIや自然言語処理で解釈して
+Keywordを推測しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>40. keywords</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>Version</td>
+</tr>
+
+<tr>
+<td><code>keyword_id</code></td>
+<td>Keyword ID</td>
+</tr>
+
+<tr>
+<td><code>name</code></td>
+<td>表示名称</td>
+</tr>
+
+<tr>
+<td><code>sort_order</code></td>
+<td>表示順</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>41. card_keywords</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>Version</td>
+</tr>
+
+<tr>
+<td><code>card_id</code></td>
+<td>カードID</td>
+</tr>
+
+<tr>
+<td><code>keyword_id</code></td>
+<td>Keyword ID</td>
+</tr>
+
+</table>
+
+</div>
+
+<div class="rule">
+
+<p>
+Keywordなしのカードは
+card_keywords 0件とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>42. skill_text</h2>
+
+<div class="box">
+
+<p>
+能力テキストは
+<code>skill_text</code>
+として全文を1つのTEXTで保存する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<ul>
+<li>能力ごとの専用DB列へ分割しない。</li>
+<li>改行を維持する。</li>
+<li>表示用情報として保持する。</li>
+<li>skill_textそのものはGuess判定しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>43. flavour_text</h2>
+
+<div class="box">
+
+<p>
+取得可能な場合は
+<code>flavour_text</code>
+として保持する。
+</p>
+
+</div>
+
+<p>
+存在しない場合はNULLを許可する。
+</p>
+
+<hr>
+
+<h2>44. atk / life</h2>
+
+<div class="box">
+
+<p>
+Guess判定に使用する
+<code>atk</code> /
+<code>life</code>
+は進化前ステータスとする。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+進化後atk / lifeは
+初期版Guess判定には使用しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>45. 非Followerのatk / life</h2>
+
+<div class="example">
+
+<pre>
+Source
+
+atk = 0
+life = 0
+
+type = 非Follower
+
+
+↓
+
+Importer
+
+
+Normalized Data
+
+atk = NULL
+life = NULL
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+Sourceの0を
+ゲーム上の攻撃力0・体力0として扱わない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>46. Followerのatk / life</h2>
+
+<div class="rule">
+
+<pre>
+type = 1
+
+↓
+
+atk
+INTEGER必須
+
+life
+INTEGER必須
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+Followerでatkまたはlifeが欠損している場合は
+Validation Errorとする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>47. カード画像</h2>
+
+<div class="box">
+
+<p>
+カード画像BinaryやBase64を
+D1へ保存しない。
+</p>
+
+<p>
+cardsには
+<code>image_ref</code>
+のみ保持する。
+</p>
+
+</div>
+
+<pre>
+cards.image_ref
+
++
+
+SG_CONFIG.imageBaseUrl
+
+↓
+
+カード画像
+</pre>
+
+<hr>
+
+<h2>48. 画像取得</h2>
+
+<div class="rule">
+
+<pre>
+Browser
+
+↓
+
+画像配信元
+
+
+Worker
+→ 原則経由しない
+</pre>
+
+</div>
+
+<p>
+画像表示ごとに
+Worker / D1へアクセスする構造にしない。
+</p>
+
+<hr>
+
+<h2>49. image_ref</h2>
+
+<div class="box">
+
+<p>
+Source Dataの
+<code>card_image_hash</code>
+等の確認済み画像識別情報から、
+Importerが
+<code>image_ref</code>
+を生成する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+確認できていない画像URL規則を推測しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>50. enabled</h2>
+
+<div class="box">
+
+<pre>
+enabled = 1
+
+→ ゲーム対象として利用可能
+
+
+enabled = 0
+
+→ ゲーム対象外
+</pre>
+
+</div>
+
+<div class="warning">
+
+<p>
+Validation Errorのあるカードを
+とりあえず
+<code>enabled=0</code>
+として無視し、
+VersionをPublishするための逃げ道には使用しない。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+enabled=falseが必要な場合は、
+確認済みの明示的な運営・Importルールに基づいて
+新Data Versionへ反映する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>51. Data Versionの完全Snapshot</h2>
+
+<div class="rule">
+
+<strong>
+各Data Versionは
+そのVersionで使用するデータ一式を保持する。
+</strong>
+
+</div>
+
+<pre>
+Version A
+
+├─ cards
+├─ card_sets
+├─ classes
+├─ types
+├─ rarities
+├─ tribes
+├─ card_tribes
+├─ keywords
+└─ card_keywords
+
+
+Version B
+
+├─ cards
+├─ card_sets
+├─ classes
+├─ types
+├─ rarities
+├─ tribes
+├─ card_tribes
+├─ keywords
+└─ card_keywords
+</pre>
+
+<p>
+差分だけを保存して過去Versionへ継ぎ足す方式にはしない。
+</p>
+
+<hr>
+
+<h2>52. Published Version</h2>
+
+<div class="rule">
+
+<strong>
+Published VersionはImmutable。
+</strong>
+
+</div>
+
+<pre>
+Published A
+
+↓
+
+誤り発見
+
+↓
+
+Aを直接編集
+×
+
+↓
+
+Importer等を修正
+
+↓
+
+Draft B
+
+↓
+
+Validation
+
+↓
+
+Published B
+○
+</pre>
+
+<hr>
+
+<h2>53. ゲーム開始時のVersion固定</h2>
+
+<div class="rule">
+
+<p>
+ゲーム開始時に
+<code>data_version_id</code>
+を固定する。
+</p>
+
+</div>
+
+<pre>
+Game開始
+
+data_version_id = A
+
+↓
+
+Current = Bへ変更
+
+↓
+
+進行中Game
+
+Aを継続使用
+</pre>
+
+<hr>
+
+<h2>54. Current変更と新規ゲーム</h2>
+
+<div class="box">
+
+<pre>
+Current = Version A
+
+↓
+
+新規Game
+Version A
+
+
+CurrentをBへ変更
+
+↓
+
+以後の新規Game
+Version B
+</pre>
+
+</div>
+
+<div class="notice">
+
+<p>
+Current変更後も
+開始済みゲームをVersion Bへ移行しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>55. 古いVersion</h2>
+
+<div class="rule">
+
+<p>
+初期版では
+過去Published Versionを自動削除しない。
+</p>
+
+</div>
+
+<p>
+進行中ゲームやロールバックで必要となる可能性があるためである。
+</p>
+
+<hr>
+
+<h2>56. Data Version生成経路</h2>
+
+<div class="box">
+
+<pre>
+Official Structured Source
+
+↓
+
+Sanitized Source Archive
+
+↓
+
+Source Schema Check
+
+↓
+
+Deterministic Importer
+
+↓
+
+Explicit Mapping
+
+↓
+
+Normalized Data
+
+↓
+
+Draft Version
+
+↓
+
+Validation
+
+↓
+
+Diff Report
+
+↓
+
+Search Index生成
+
+↓
+
+Admin Review
+
+↓
+
+Published
+
+↓
+
+Current変更
+</pre>
+
+</div>
+
+<div class="notice">
+
+<p>
+詳細は08を正とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>57. Validation</h2>
+
+<div class="box">
+
+<p>
+Draft VersionをPublishedにする前に
+データ整合性を検証する。
+</p>
+
+</div>
+
+<div class="rule">
+
+<p>
+少なくとも以下を検証する。
+</p>
+
+<ul>
+<li>card_id存在。</li>
+<li>Version内card_id重複なし。</li>
+<li>name存在。</li>
+<li>classが既知。</li>
+<li>typeが1 / 2 / 3。</li>
+<li>rarityが既知。</li>
+<li>必要なcard_set Mappingが正常。</li>
+<li>costが0以上の整数。</li>
+<li>Followerのatk / life存在。</li>
+<li>is_tokenが正常なBoolean。</li>
+<li>tribe_modeがnormal / all。</li>
+<li>card_tribes参照整合。</li>
+<li>card_keywords参照整合。</li>
+<li>enabledカードのimage_ref存在。</li>
+<li>前Versionからカードが意図せず消失していない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>58. Validation Error / Warning</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>Level</th>
+<th>処理</th>
+</tr>
+
+<tr>
+<td>Error</td>
+<td>Publish不可</td>
+</tr>
+
+<tr>
+<td>Warning</td>
+<td>管理画面表示。Errorがなければ確認後Publish可能</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>59. 未知値</h2>
+
+<div class="warning">
+
+<p>
+以下のような未知値を
+自動推測しない。
+</p>
+
+<pre>
+UNKNOWN_CLASS_ID
+
+UNKNOWN_TYPE_ID
+
+UNKNOWN_RARITY_ID
+
+UNKNOWN_TRIBE_ID
+
+UNKNOWN_CARD_SET_ID
+
+UNKNOWN_KEYWORD
+</pre>
+
+</div>
+
+<p>
+Mappingが確認されるまでImportを停止する。
+</p>
+
+<hr>
+
+<h2>60. カード消失</h2>
+
+<div class="warning">
+
+<p>
+前Versionに存在したcard_idが
+新Sourceから消えた場合、
+自動削除と判断しない。
+</p>
+
+</div>
+
+<pre>
+Previous Version
+
+card_idあり
+
+↓
+
+New Source
+
+card_idなし
+
+↓
+
+MISSING_CARD_FROM_SOURCE
+
+↓
+
+Validation Error
+</pre>
+
+<hr>
+
+<h2>61. 検索用静的データ</h2>
+
+<div class="box">
+
+<p>
+カード名入力ごとに
+Worker / D1へアクセスしないため、
+Version別の静的検索Indexを生成する。
+</p>
+
+</div>
+
+<pre>
+card-search-index-[version_code].json
+</pre>
+
+<div class="example">
+
+<pre>
+card-search-index-2026-07-28-01.json
+</pre>
+
+</div>
+
+<hr>
+
+<h2>62. Search IndexとVersion</h2>
+
+<div class="rule">
+
+<p>
+ゲームが固定している
+<code>data_version_id</code>
+に対応する
+<code>version_code</code>
+の検索Indexを使用する。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+D1は旧Versionなのに
+検索IndexだけCurrentを使用する状態を作らない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>63. Search Index項目</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>含める</th>
+</tr>
+
+<tr>
+<td><code>card_id</code></td>
+<td>○</td>
+</tr>
+
+<tr>
+<td><code>name</code></td>
+<td>○</td>
+</tr>
+
+<tr>
+<td><code>class</code></td>
+<td>○</td>
+</tr>
+
+<tr>
+<td><code>type</code></td>
+<td>○</td>
+</tr>
+
+<tr>
+<td><code>card_set_id</code></td>
+<td>○</td>
+</tr>
+
+<tr>
+<td><code>rarity</code></td>
+<td>○</td>
+</tr>
+
+<tr>
+<td><code>is_token</code></td>
+<td>○</td>
+</tr>
+
+<tr>
+<td><code>atk</code></td>
+<td>原則含めない</td>
+</tr>
+
+<tr>
+<td><code>life</code></td>
+<td>原則含めない</td>
+</tr>
+
+<tr>
+<td><code>cost</code></td>
+<td>原則含めない</td>
+</tr>
+
+<tr>
+<td><code>skill_text</code></td>
+<td>含めない</td>
+</tr>
+
+<tr>
+<td><code>flavour_text</code></td>
+<td>含めない</td>
+</tr>
+
+<tr>
+<td>keywords</td>
+<td>原則含めない</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>64. Search Index JSON</h2>
+
+<div class="example">
+
+<pre>
+{
+    "version_code": "2026-07-28-01",
+
+    "cards": [
+
+        {
+            "card_id": "CARD_ID_A",
+            "name": "カードA",
+            "class": 0,
+            "type": 1,
+            "card_set_id": 10000,
+            "rarity": 1,
+            "is_token": false
+        }
+
+    ]
+}
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+検索IndexのVersion表記には
+<code>version_code</code>
+を使用する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>65. サジェスト検索</h2>
+
+<div class="rule">
+
+<ul>
+<li>ブラウザ内検索。</li>
+<li>2文字以上で開始。</li>
+<li>最大10件。</li>
+<li>部分一致。</li>
+<li>かな・カナ等の特殊正規化は行わない。</li>
+<li>候補選択時にcard_idを保持。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>66. 正式な回答</h2>
+
+<div class="box">
+
+<p>
+ブラウザからのGuessでは
+カード名ではなくcard_idを送信する。
+</p>
+
+</div>
+
+<pre>
+{
+    "card_id": "CARD_ID_A"
+}
+</pre>
+
+<div class="rule">
+
+<p>
+サーバーは固定data_version_idと
+回答可能範囲を使ってcard_idを再検証する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>67. daily_configs</h2>
+
+<div class="box">
+
+<p>
+同一daily_keyで共通となる
+Daily問題データを保持する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>daily_key</code></td>
+<td>JST 05:00区切りのDaily識別子</td>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>そのDailyで固定するVersion</td>
+</tr>
+
+<tr>
+<td><code>answer_card_id</code></td>
+<td>共通正解カード</td>
+</tr>
+
+<tr>
+<td><code>range_mode</code></td>
+<td>回答範囲</td>
+</tr>
+
+<tr>
+<td><code>range_config</code></td>
+<td>必要な場合の範囲詳細</td>
+</tr>
+
+<tr>
+<td><code>created_at</code></td>
+<td>生成日時</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>68. daily_key</h2>
+
+<div class="rule">
+
+<p>
+Daily切替境界は
+<strong>JST 05:00</strong>
+とする。
+</p>
+
+</div>
+
+<p>
+同一daily_keyでは
+answer_card_idとdata_version_idを変更しない。
+</p>
+
+<hr>
+
+<h2>69. daily_controls</h2>
+
+<div class="box">
+
+<p>
+Daily問題そのものではなく、
+<strong>そのdaily_keyを提供してよいか</strong>
+を管理する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>daily_key</code></td>
+<td>Daily識別子</td>
+</tr>
+
+<tr>
+<td><code>status</code></td>
+<td>active / suspended</td>
+</tr>
+
+<tr>
+<td><code>reason</code></td>
+<td>停止理由</td>
+</tr>
+
+<tr>
+<td><code>suspended_at</code></td>
+<td>停止日時</td>
+</tr>
+
+<tr>
+<td><code>suspended_by</code></td>
+<td>停止実行者</td>
+</tr>
+
+<tr>
+<td><code>created_at</code></td>
+<td>作成日時</td>
+</tr>
+
+</table>
+
+</div>
+
+<div class="rule">
+
+<p>
+主な停止理由は以下とする。
+</p>
+
+<pre>
+card_update
+
+bug
+</pre>
+
+</div>
+
+<hr>
+
+<h2>70. daily_configsとdaily_controls</h2>
+
+<div class="box">
+
+<pre>
+daily_controls
+
+↓
+
+本日のDailyを
+提供してよいか
+
+
+daily_configs
+
+↓
+
+生成済みDailyの
+
+data_version_id
+
+answer_card_id
+
+range
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+Dailyの問題内容と
+Dailyの提供可否を分離する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>71. Current変更とDaily</h2>
+
+<div class="warning">
+
+<p>
+Current Versionが変更された場合、
+現在のdaily_keyを
+<code>suspended</code>
+へ変更する。
+</p>
+
+</div>
+
+<pre>
+Current変更
+
+↓
+
+daily_controls
+
+status = suspended
+
+reason = card_update
+</pre>
+
+<div class="rule">
+
+<p>
+daily_configsのanswer_card_idを
+新Versionのカードへ書き換えて
+当日Dailyを続行しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>72. Daily停止中</h2>
+
+<div class="rule">
+
+<ul>
+<li>新規Daily開始不可。</li>
+<li>当日Daily再挑戦不可。</li>
+<li>Resume不可。</li>
+<li>回答不可。</li>
+<li>ヒント不可。</li>
+<li>正解非公開。</li>
+<li>失敗・降参として扱わない。</li>
+</ul>
+
+</div>
+
+<p>
+詳細な動作は07を正とする。
+</p>
+
+<hr>
+
+<h2>73. operator_settings</h2>
+
+<div class="box">
+
+<p>
+管理画面から変更可能な
+少数の運営設定を保存する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>setting_key</code></td>
+<td>設定名</td>
+</tr>
+
+<tr>
+<td><code>setting_value</code></td>
+<td>設定値</td>
+</tr>
+
+<tr>
+<td><code>updated_at</code></td>
+<td>更新日時</td>
+</tr>
+
+<tr>
+<td><code>updated_by</code></td>
+<td>更新者</td>
+</tr>
+
+</table>
+
+<div class="example">
+
+<pre>
+contact_url
+
+maintenance_mode
+</pre>
+
+</div>
+
+<hr>
+
+<h2>74. operator_settingsへ入れないもの</h2>
+
+<div class="warning">
+
+<p>
+ゲームルール定数を
+何でも管理画面から変更可能にはしない。
+</p>
+
+</div>
+
+<p>
+例えば以下は初期版で運営設定化しない。
+</p>
+
+<ul>
+<li>回答上限10回。</li>
+<li>Battleの120秒。</li>
+<li>Rotationの6パック。</li>
+<li>Custom最低31枚。</li>
+<li>判定アルゴリズム。</li>
+</ul>
+
+<hr>
+
+<h2>75. admin_audit_logs</h2>
+
+<div class="box">
+
+<p>
+重要な管理操作を監査可能にする。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>audit_id</code></td>
+<td>監査ログID</td>
+</tr>
+
+<tr>
+<td><code>occurred_at</code></td>
+<td>実行日時</td>
+</tr>
+
+<tr>
+<td><code>actor_id</code></td>
+<td>管理者識別情報</td>
+</tr>
+
+<tr>
+<td><code>actor_email</code></td>
+<td>管理者メール情報</td>
+</tr>
+
+<tr>
+<td><code>action</code></td>
+<td>操作種類</td>
+</tr>
+
+<tr>
+<td><code>target_type</code></td>
+<td>操作対象種類</td>
+</tr>
+
+<tr>
+<td><code>target_id</code></td>
+<td>操作対象ID</td>
+</tr>
+
+<tr>
+<td><code>before_json</code></td>
+<td>変更前情報</td>
+</tr>
+
+<tr>
+<td><code>after_json</code></td>
+<td>変更後情報</td>
+</tr>
+
+<tr>
+<td><code>request_id</code></td>
+<td>二重処理防止・追跡用requestId</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>76. 監査対象操作</h2>
+
+<div class="rule">
+
+<ul>
+<li>Version Publish。</li>
+<li>Current Version変更。</li>
+<li>Versionロールバック。</li>
+<li>Daily手動停止。</li>
+<li>Maintenance ON。</li>
+<li>Maintenance OFF。</li>
+<li>contactUrl変更。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>77. error_logs</h2>
+
+<div class="box">
+
+<p>
+カードデータ・判定・ゲーム状態等の
+異常調査用ログを保持する。
+</p>
+
+</div>
+
+<table>
+
+<tr>
+<th>カラム</th>
+<th>内容</th>
+</tr>
+
+<tr>
+<td><code>error_id</code></td>
+<td>問い合わせ用一意ID</td>
+</tr>
+
+<tr>
+<td><code>error_code</code></td>
+<td>エラー種類</td>
+</tr>
+
+<tr>
+<td><code>occurred_at</code></td>
+<td>発生日時</td>
+</tr>
+
+<tr>
+<td><code>data_version_id</code></td>
+<td>関連Version</td>
+</tr>
+
+<tr>
+<td><code>game_mode</code></td>
+<td>ゲームモード</td>
+</tr>
+
+<tr>
+<td><code>game_id</code></td>
+<td>必要な場合のゲームID</td>
+</tr>
+
+<tr>
+<td><code>room_id</code></td>
+<td>必要な場合のRoom ID</td>
+</tr>
+
+<tr>
+<td><code>answer_card_id</code></td>
+<td>内部調査用</td>
+</tr>
+
+<tr>
+<td><code>guessed_card_id</code></td>
+<td>内部調査用</td>
+</tr>
+
+<tr>
+<td><code>invalid_field</code></td>
+<td>異常項目</td>
+</tr>
+
+<tr>
+<td><code>invalid_value</code></td>
+<td>必要な場合の異常値</td>
+</tr>
+
+<tr>
+<td><code>request_id</code></td>
+<td>関連requestId</td>
+</tr>
+
+</table>
+
+</div>
+
+<div class="warning">
+
+<p>
+error_logsの内部情報を
+そのまま一般ユーザーへ表示しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>78. ログへ保存しない秘密情報</h2>
+
+<div class="warning">
+
+<ul>
+<li>Cookie。</li>
+<li>Authorization。</li>
+<li>CSRF Token。</li>
+<li>生のsessionToken。</li>
+<li>生のreconnectToken。</li>
+<li>秘密鍵。</li>
+<li>不要な個人情報。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>79. エラーコード例</h2>
+
+<div class="box">
+
+<pre>
+CARD_DATA_INVALID
+
+CARD_DATA_MISSING
+
+CARD_REFERENCE_ERROR
+
+JUDGEMENT_ERROR
+
+GAME_STATE_ERROR
+
+DATABASE_ERROR
+</pre>
+
+</div>
+
+<p>
+必要なエラーコードは実装時に追加可能とする。
+</p>
+
+<hr>
+
+<h2>80. ユーザーアカウント</h2>
+
+<div class="rule">
+
+<pre>
+users
+accounts
+profiles
+
+→ 初期版では作成しない
+</pre>
+
+</div>
+
+<hr>
+
+<h2>81. 戦績</h2>
+
+<div class="rule">
+
+<pre>
+match_results
+user_stats
+rankings
+daily_streaks
+
+→ 初期版では作成しない
+</pre>
+
+</div>
+
+<hr>
+
+<h2>82. 進行中ゲーム</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>モード</th>
+<th>進行状態</th>
+</tr>
+
+<tr>
+<td>Solo</td>
+<td>GameSessionDO</td>
+</tr>
+
+<tr>
+<td>Daily</td>
+<td>GameSessionDO + D1 daily_configs / daily_controls</td>
+</tr>
+
+<tr>
+<td>2人出題</td>
+<td>ChallengeGameDO</td>
+</tr>
+
+<tr>
+<td>2人対戦</td>
+<td>BattleRoomDO</td>
+</tr>
+
+</table>
+
+</div>
+
+<div class="rule">
+
+<p>
+進行中ゲームのGuess履歴等を
+ユーザー戦績としてD1へ永続蓄積しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>83. D1 Index</h2>
+
+<div class="box">
+
+<p>
+ゲーム処理ごとにcards全件走査を行わないよう、
+必要なIndexを設計する。
+</p>
+
+</div>
+
+<pre>
+data_version_id + card_id
+
+data_version_id + enabled
+
+data_version_id + card_set_id
+
+data_version_id + class
+
+data_version_id + type
+
+data_version_id + rarity
+
+data_version_id + is_token
+</pre>
+
+<div class="notice">
+
+<p>
+実際の複合Index構成は
+実装したQueryとデータ量を確認して最終決定する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>84. D1テーブル一覧</h2>
+
+<div class="box">
+
+<pre>
+D1
+
+├─ data_versions
+│
+├─ cards
+│
+├─ card_sets
+│
+├─ classes
+│
+├─ types
+│
+├─ rarities
+│
+├─ tribes
+│
+├─ card_tribes
+│
+├─ keywords
+│
+├─ card_keywords
+│
+├─ daily_configs
+│
+├─ daily_controls
+│
+├─ operator_settings
+│
+├─ error_logs
+│
+└─ admin_audit_logs
+</pre>
+
+</div>
+
+<hr>
+
+<h2>85. テーブル分類</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>分類</th>
+<th>テーブル</th>
+</tr>
+
+<tr>
+<td>Version</td>
+<td>data_versions</td>
+</tr>
+
+<tr>
+<td>Versioned Card Data</td>
+<td>cards / card_sets / classes / types / rarities / tribes / card_tribes / keywords / card_keywords</td>
+</tr>
+
+<tr>
+<td>Daily</td>
+<td>daily_configs / daily_controls</td>
+</tr>
+
+<tr>
+<td>運営</td>
+<td>operator_settings</td>
+</tr>
+
+<tr>
+<td>ログ</td>
+<td>error_logs / admin_audit_logs</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>86. Versioned Table</h2>
+
+<div class="rule">
+
+<p>
+以下のカードマスター系テーブルは
+<code>data_version_id</code>
+と結び付ける。
+</p>
+
+</div>
+
+<pre>
+cards
+
+card_sets
+
+classes
+
+types
+
+rarities
+
+tribes
+
+card_tribes
+
+keywords
+
+card_keywords
+</pre>
+
+<hr>
+
+<h2>87. Daily・運営データはSnapshotとは別</h2>
+
+<div class="box">
+
+<p>
+以下はカードデータSnapshotそのものではない。
+</p>
+
+</div>
+
+<pre>
+daily_configs
+
+daily_controls
+
+operator_settings
+
+error_logs
+
+admin_audit_logs
+</pre>
+
+<div class="rule">
+
+<p>
+カードVersionを作成するたびに
+これらをSnapshot複製しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>88. 論理関係</h2>
+
+<div class="box">
+
+<pre>
+data_versions
+      │
+      │
+      ├──── cards
+      │       │
+      │       ├──── classes
+      │       │
+      │       ├──── types
+      │       │
+      │       ├──── rarities
+      │       │
+      │       ├──── card_sets
+      │       │
+      │       ├──── card_tribes ── tribes
+      │       │
+      │       └──── card_keywords ─ keywords
+      │
+      └──── Versioned Search Index
+
+
+daily_configs
+      │
+      ├──── data_version_id
+      └──── answer_card_id
+
+
+daily_controls
+      │
+      └──── daily_key
+
+
+operator_settings
+
+error_logs
+
+admin_audit_logs
+</pre>
+
+</div>
+
+<hr>
+
+<h2>89. pack_name</h2>
+
+<div class="box">
+
+<p>
+人間向けの収録元表示は
+Derived Dataとして生成する。
+</p>
+
+</div>
+
+<pre>
+if (is_token === true) {
+
+    pack_name = "トークン";
+
+}
+else if (card_set_id === 10000) {
+
+    pack_name = "ベーシック";
+
+}
+else {
+
+    pack_name = card_sets.name;
+
+}
+</pre>
+
+<div class="rule">
+
+<p>
+pack_nameをcardsへ保存しない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>90. 表示例</h2>
+
+<div class="example">
+
+<h3>Token</h3>
+
+<pre>
+カード名：
+&lt;TOKEN_CARD_NAME&gt;
+
+セット区分：
+トークン
+
+収録パック：
+トークン
+
+is_token：
+true
+</pre>
+
+</div>
+
+<div class="example">
+
+<h3>Basic</h3>
+
+<pre>
+カード名：
+&lt;BASIC_CARD_NAME&gt;
+
+セット区分：
+ベーシック
+
+収録パック：
+ベーシック
+
+card_set_id：
+10000
+
+is_token：
+false
+</pre>
+
+</div>
+
+<div class="example">
+
+<h3>通常カードパック</h3>
+
+<pre>
+カード名：
+&lt;CARD_NAME&gt;
+
+セット区分：
+カードパック
+
+収録パック：
+&lt;CARD_SET_NAME&gt;
+
+card_set_id：
+&lt;CARD_SET_ID&gt;
+
+is_token：
+false
+</pre>
+
+</div>
+
+<hr>
+
+<h2>91. Source変更耐性</h2>
+
+<div class="box">
+
+<pre>
+Official Source
+
+↓
+
+Importer
+
+↓
+
+Normalized Data
+
+↓
+
+D1
+
+↓
+
+Game
+</pre>
+
+</div>
+
+<div class="rule">
+
+<p>
+公式Source Schemaが変更された場合は、
+ゲーム本体で無理に読み替えず
+Importerを更新する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>92. Source Schema変更</h2>
+
+<div class="warning">
+
+<pre>
+期待：
+
+tribes
+
+
+Source：
+
+tribe_ids
+
+
+↓
+
+自動で
+「同じ意味だろう」
+と判断しない
+
+↓
+
+SOURCE_SCHEMA_MISMATCH
+</pre>
+
+</div>
+
+<hr>
+
+<h2>93. 推測禁止</h2>
+
+<div class="warning">
+
+<ul>
+<li>card_set_idの数値からパック順を推測しない。</li>
+<li>特定card_set_idだからTokenと推測しない。</li>
+<li>starter_set_idからTokenを推測しない。</li>
+<li>Source type値から未確認の分類を推測しない。</li>
+<li>tribe IDの意味を数字から推測しない。</li>
+<li>カード名からclassを推測しない。</li>
+<li>能力文だけからKeywordを推測しない。</li>
+</ul>
+
+</div>
+
+<hr>
+
+<h2>94. 04で固定しない実データ</h2>
+
+<div class="box">
+
+<p>
+以下はデータ構造の設計ではなく、
+公式Source確認によって決定するマスターデータである。
+</p>
+
+</div>
+
+<ul>
+<li>Source type IDの正式な意味。</li>
+<li>rarity IDの全対応。</li>
+<li>tribe IDの全対応。</li>
+<li>Keyword一覧。</li>
+<li>card_set_idと正式名称の全対応。</li>
+<li>release_order。</li>
+<li>「全て」に対応するSource表現。</li>
+<li>画像参照の正式規則。</li>
+</ul>
+
+<div class="rule">
+
+<p>
+未知のままであれば
+Importer / Validationを停止する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>95. Source Archive</h2>
+
+<div class="box">
+
+<p>
+Published Version生成に使用したSource Dataは、
+08で定義するSource Archiveとして追跡可能にする。
+</p>
+
+</div>
+
+<pre>
+data_version_id
+
+↓
+
+raw_data_hash
+
+↓
+
+Source Archive
+
+↓
+
+importer_version
+
+↓
+
+source_schema_version
+</pre>
+
+<div class="warning">
+
+<p>
+Source Archiveを
+一般公開Pages配下へ置かない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>96. Published Versionの再現性</h2>
+
+<div class="rule">
+
+<p>
+同じSource Data、
+同じImporter Version、
+同じMappingから
+同じNormalized Dataを生成できることを基本とする。
+</p>
+
+</div>
+
+<hr>
+
+<h2>97. Diff Report</h2>
+
+<div class="box">
+
+<p>
+新Data Version作成時は
+比較対象Versionとの差分を生成する。
+</p>
+
+</div>
+
+<pre>
+new
+
+changed
+
+unchanged
+
+missing
+</pre>
+
+<p>
+Diff Report自体の具体的な保存形式は08で定義する。
+</p>
+
+<hr>
+
+<h2>98. Search Index Publish条件</h2>
+
+<div class="rule">
+
+<p>
+Search Indexが正常に生成・ValidationできないVersionは
+Publishしない。
+</p>
+
+</div>
+
+<div class="warning">
+
+<p>
+D1 DataだけPublishして
+対応Search Indexが存在しない状態を作らない。
+</p>
+
+</div>
+
+<hr>
+
+<h2>99. Current切替前整合性</h2>
+
+<div class="rule">
+
+<pre>
+Published
+
+AND
+
+D1 Snapshot Ready
+
+AND
+
+Search Index Ready
+
+AND
+
+Version一致
+
+↓
+
+Current変更可能
+</pre>
+
+</div>
+
+<hr>
+
+<h2>100. Current変更の原子性</h2>
+
+<div class="box">
+
+<p>
+Current Version変更と
+当日Daily停止は、
+可能な限り一貫した操作として処理する。
+</p>
+
+</div>
+
+<div class="notice">
+
+<p>
+具体的なD1 transaction / batch処理は
+06・07で定義する。
+</p>
+
+</div>
+
+<hr>
+
+<h2>101. ゲームデータと管理データの分離</h2>
+
+<div class="box">
+
+<p>
+カードマスターと、
+運営状態を同一概念として扱わない。
+</p>
+
+</div>
+
+<pre>
+Card Data
+
+cards
+card_sets
+classes
+types
+rarities
+tribes
+keywords
+...
+
+
+Operator Data
+
+daily_controls
+operator_settings
+admin_audit_logs
+</pre>
+
+<hr>
+
+<h2>102. ゲームからSource Archiveを参照しない</h2>
+
+<div class="rule">
+
+<pre>
+Game
+
+↓
+
+Normalized D1 Data
+
+
+Game
+
+↓
+
+Source Archive
+
+×
+</pre>
+
+</div>
+
+<hr>
+
+<h2>103. ゲームからDraftを参照しない</h2>
+
+<div class="warning">
+
+<p>
+通常ゲームは
+Draft Versionを使用しない。
+</p>
+
+</div>
+
+<pre>
+Draft
+→ Admin / Validation用
+
+
+Published Current
+→ 新規Game用
+
+
+Published Old
+→ 進行中Game / Rollback用
+</pre>
+
+<hr>
+
+<h2>104. データ設計全体図</h2>
+
+<div class="box">
+
+<pre>
+Official Structured Source
+          │
+          ▼
+Sanitized Source Archive
+          │
+          ├─ raw_data_hash
+          ├─ source_schema_version
+          └─ importer_version
+          │
+          ▼
+Deterministic Importer
+          │
+          ▼
+Explicit Mapping
+          │
+          ▼
+Normalized Data
+          │
+          ▼
+Draft Data Version
+          │
+          ▼
+Validation / Diff
+          │
+          ▼
+Search Index生成
+          │
+          ▼
+Published
+          │
+          ▼
+Cloudflare D1
+          │
+          ├─ data_versions
+          ├─ cards
+          ├─ card_sets
+          ├─ classes
+          ├─ types
+          ├─ rarities
+          ├─ tribes
+          ├─ card_tribes
+          ├─ keywords
+          ├─ card_keywords
+          │
+          ├─ daily_configs
+          ├─ daily_controls
+          ├─ operator_settings
+          ├─ error_logs
+          └─ admin_audit_logs
+          │
+          ├───────────────────────┐
+          │                       │
+          ▼                       ▼
+      Workers / DO       Versioned Search Index
+          │                       │
+          ▼                       ▼
+    正式ゲーム判定        Browser Suggestion
+</pre>
+
+</div>
+
+<hr>
+
+<h2>105. 04で確定する重要事項</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>項目</th>
+<th>確定仕様</th>
+</tr>
+
+<tr>
+<td>永続DB</td>
+<td>Cloudflare D1</td>
+</tr>
+
+<tr>
+<td>進行中ゲーム</td>
+<td>Durable Objects</td>
+</tr>
+
+<tr>
+<td>カード識別</td>
+<td>card_id</td>
+</tr>
+
+<tr>
+<td>Version内部ID</td>
+<td>data_version_id</td>
+</tr>
+
+<tr>
+<td>人間向けVersion</td>
+<td>version_code</td>
+</tr>
+
+<tr>
+<td>Version Code形式</td>
+<td>JST YYYY-MM-DD-serial</td>
+</tr>
+
+<tr>
+<td>Source追跡</td>
+<td>raw_data_hash</td>
+</tr>
+
+<tr>
+<td>Importer追跡</td>
+<td>importer_version</td>
+</tr>
+
+<tr>
+<td>Schema追跡</td>
+<td>source_schema_version</td>
+</tr>
+
+<tr>
+<td>カードVersion</td>
+<td>完全Snapshot</td>
+</tr>
+
+<tr>
+<td>Published</td>
+<td>Immutable</td>
+</tr>
+
+<tr>
+<td>Current</td>
+<td>Publishedから1つ</td>
+</tr>
+
+<tr>
+<td>攻撃力</td>
+<td>atk</td>
+</tr>
+
+<tr>
+<td>体力</td>
+<td>life</td>
+</tr>
+
+<tr>
+<td>分類</td>
+<td>type</td>
+</tr>
+
+<tr>
+<td>Normalized type</td>
+<td>1 / 2 / 3</td>
+</tr>
+
+<tr>
+<td>Source type</td>
+<td>Importer Mapping後に使用</td>
+</tr>
+
+<tr>
+<td>Token</td>
+<td>is_token</td>
+</tr>
+
+<tr>
+<td>Basic</td>
+<td>is_token=false AND card_set_id=10000</td>
+</tr>
+
+<tr>
+<td>Starter情報</td>
+<td>starter_set_idへ分離</td>
+</tr>
+
+<tr>
+<td>Pack発売順</td>
+<td>release_order</td>
+</tr>
+
+<tr>
+<td>Rotation</td>
+<td>Basic + 最新6通常Pack / Token除外</td>
+</tr>
+
+<tr>
+<td>Custom Token</td>
+<td>Pack条件のみ適用しない</td>
+</tr>
+
+<tr>
+<td>タイプ</td>
+<td>tribes / card_tribes</td>
+</tr>
+
+<tr>
+<td>タイプなし</td>
+<td>card_tribes 0件</td>
+</tr>
+
+<tr>
+<td>タイプ「全て」</td>
+<td>tribe_mode=all</td>
+</tr>
+
+<tr>
+<td>Keyword</td>
+<td>keywords / card_keywords</td>
+</tr>
+
+<tr>
+<td>能力テキスト</td>
+<td>skill_text</td>
+</tr>
+
+<tr>
+<td>非Follower atk/life</td>
+<td>NULL</td>
+</tr>
+
+<tr>
+<td>画像本体</td>
+<td>D1へ保存しない</td>
+</tr>
+
+<tr>
+<td>画像参照</td>
+<td>image_ref</td>
+</tr>
+
+<tr>
+<td>検索</td>
+<td>Version別静的JSON</td>
+</tr>
+
+<tr>
+<td>Daily問題</td>
+<td>daily_configs</td>
+</tr>
+
+<tr>
+<td>Daily提供状態</td>
+<td>daily_controls</td>
+</tr>
+
+<tr>
+<td>Current変更</td>
+<td>当日のDaily suspended</td>
+</tr>
+
+<tr>
+<td>運営設定</td>
+<td>operator_settings</td>
+</tr>
+
+<tr>
+<td>エラーログ</td>
+<td>error_logs</td>
+</tr>
+
+<tr>
+<td>監査ログ</td>
+<td>admin_audit_logs</td>
+</tr>
+
+<tr>
+<td>ユーザーテーブル</td>
+<td>初期版なし</td>
+</tr>
+
+<tr>
+<td>戦績テーブル</td>
+<td>初期版なし</td>
+</tr>
+
+<tr>
+<td>未知値</td>
+<td>推測せずImport停止</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>106. 他設計書との責務</h2>
+
+<div class="box">
+
+<table>
+
+<tr>
+<th>内容</th>
+<th>設計書</th>
+</tr>
+
+<tr>
+<td>回答範囲・Custom・Rotation</td>
+<td>02</td>
+</tr>
+
+<tr>
+<td>カード比較判定</td>
+<td>03</td>
+</tr>
+
+<tr>
+<td>画面表示</td>
+<td>05</td>
+</tr>
+
+<tr>
+<td>API・DO・WebSocket・ゲーム状態</td>
+<td>06</td>
+</tr>
+
+<tr>
+<td>管理画面・Daily停止・Current操作</td>
+<td>07</td>
+</tr>
+
+<tr>
+<td>Source取得・Importer・Validation・Diff・Publish</td>
+<td>08</td>
+</tr>
+
+<tr>
+<td>将来機能</td>
+<td>09</td>
+</tr>
+
+</table>
+
+</div>
+
+<hr>
+
+<h2>107. 最終方針</h2>
+
+<div class="rule">
+
+<ol>
+<li>Source Dataとゲーム用Normalized Dataを分離する。</li>
+<li>card_idをカードの正式識別子とする。</li>
+<li>data_version_idとversion_codeを明確に分離する。</li>
+<li>Source由来の意味が確認できない値を推測しない。</li>
+<li>Token判定はis_tokenを正とする。</li>
+<li>Basicは非Tokenかつcard_set_id=10000とする。</li>
+<li>分類typeとタイプtribesを分離する。</li>
+<li>非Followerのatk / lifeはNULLとする。</li>
+<li>能力テキストとKeywordを分離する。</li>
+<li>画像BinaryをD1へ保存しない。</li>
+<li>Data Versionは完全Snapshotとする。</li>
+<li>Published Versionを書き換えない。</li>
+<li>進行中ゲームのdata_version_idを途中変更しない。</li>
+<li>Version別Search Indexを使用する。</li>
+<li>Daily問題とDaily提供状態を分離する。</li>
+<li>運営設定・監査ログをカードマスターと分離する。</li>
+<li>ゲームの一時状態をD1へ永続戦績として蓄積しない。</li>
+<li>Source Archiveを一般ゲームから直接参照しない。</li>
+</ol>
+
+</div>
+
+<hr>
+
+<p class="small">
+Shado Guesser 基本設計書<br>
+04 データ設計<br><br>
+©Shado Guesser
+</p>
+
+</body>
+</html>
